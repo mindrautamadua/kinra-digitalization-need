@@ -39,3 +39,10 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# lampiran privat
+/storage
+!.env.example
+
+# dump database (berisi hash password)
+backup/
