@@ -77,17 +77,18 @@ export const needDraftSchema = z.object({
 export type NeedDraftInput = z.infer<typeof needDraftSchema>;
 export type NeedFormValues = z.input<typeof needDraftSchema>;
 
-/** Daftar kolom wajib untuk submit (sesuai PRD 8.2). */
+/**
+ * Daftar kolom wajib untuk submit. Lebih ringkas dari PRD 8.2: proses bisnis menjadi opsional, dan
+ * "akibat bila tidak ditangani" digabung ke alasan urgensi; detail teknis dilengkapi saat wawancara.
+ */
 export const NEED_REQUIRED: { key: keyof NeedDraftInput; label: string; step: number }[] = [
   { key: "title", label: "Judul kebutuhan", step: 1 },
-  { key: "businessProcess", label: "Proses bisnis terkait", step: 1 },
   { key: "processOwner", label: "Pemilik proses", step: 1 },
   { key: "problemDescription", label: "Masalah yang terjadi", step: 2 },
   { key: "currentProcess", label: "Cara proses dilakukan saat ini", step: 2 },
-  { key: "consequenceIfUnresolved", label: "Dampak jika tidak ditangani", step: 2 },
   { key: "desiredOutcome", label: "Perubahan / hasil yang ingin dicapai", step: 3 },
   { key: "respondentUrgency", label: "Urgensi menurut Bagian", step: 4 },
-  { key: "urgencyReason", label: "Alasan urgensi", step: 4 },
+  { key: "urgencyReason", label: "Alasan urgensi dan akibat bila tidak ditangani", step: 4 },
 ];
 
 /** Validasi lengkap sebelum submit. Mengembalikan map error per field. */

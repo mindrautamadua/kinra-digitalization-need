@@ -25,12 +25,10 @@ test("submit lengkap lolos validasi", () => {
     needFormDataToObject(
       fd({
         title: "Penagihan manual",
-        businessProcess: "Meter-to-cash",
         processOwner: "Kabag Utilitas",
         problemDescription: "Salah ketik",
         currentProcess: "Excel",
         impacts: ["time", "revenue"],
-        consequenceIfUnresolved: "Komplain",
         desiredOutcome: "Otomatis",
         respondentUrgency: "high",
         urgencyReason: "Komplain naik",

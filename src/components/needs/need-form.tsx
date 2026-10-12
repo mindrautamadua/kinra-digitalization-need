@@ -20,7 +20,7 @@ const STEPS = [
   { n: 1, title: "Identitas & konteks" },
   { n: 2, title: "Masalah saat ini" },
   { n: 3, title: "Kebutuhan & solusi" },
-  { n: 4, title: "Manfaat, urgensi & kesiapan" },
+  { n: 4, title: "Urgensi & kesiapan" },
 ];
 
 const AUTOSAVE_MS = 30_000;
@@ -34,6 +34,10 @@ function stepOf(key: string): number | undefined {
   if (["existingSystemDetail", "integrationDetail", "sensitiveDataDetail", "dataRequired"].includes(key)) return 3;
   if (["metricName", "metricUnit", "baselineValue", "targetValue", "baseline", "target", "externalDeadline", "dependencies", "estimatedCost", "additionalNotes"].includes(key)) return 4;
   return undefined;
+}
+
+function fieldEl(form: HTMLFormElement | null, key: string) {
+  return document.getElementById(key) ?? form?.querySelector<HTMLElement>(`[name="${key}"]`) ?? null;
 }
 
 type SaveStatus = { tone: "idle" | "saving" | "saved" | "error"; text?: string };
@@ -171,11 +175,17 @@ export function NeedForm({
     handleChange();
   }
 
+  // Buka bagian opsional yang memuat kolom bererror agar pesannya terlihat.
+  useEffect(() => {
+    for (const k of Object.keys(fe)) fieldEl(formRef.current, k)?.closest("details")?.setAttribute("open", "");
+  }, [fe]);
+
   function jumpTo(key: string) {
     const n = stepOf(key);
     if (n) setStep(n);
     window.setTimeout(() => {
-      const el = document.getElementById(key) ?? formRef.current?.querySelector<HTMLElement>(`[name="${key}"]`);
+      const el = fieldEl(formRef.current, key);
+      el?.closest("details")?.setAttribute("open", "");
       el?.scrollIntoView({ behavior: "smooth", block: "center" });
       el?.focus({ preventScroll: true });
     }, 50);
@@ -211,8 +221,8 @@ export function NeedForm({
           <Info className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
           <div className="space-y-1">
             <p>
-              <span className="font-medium">Perkiraan waktu ±15 menit</span> untuk kolom wajib (ditandai *). Kolom lain membantu penilaian, tetapi boleh
-              dikosongkan bila belum diketahui. Tim Assessment dapat menanyakannya saat klarifikasi atau wawancara. Draft tersimpan otomatis setiap 30 detik.
+              <span className="font-medium">Perkiraan waktu ±10 menit</span> untuk 8 kolom wajib (ditandai *). Bagian &ldquo;Detail tambahan&rdquo; di tiap langkah
+              boleh dilewati. Tim Assessment akan menanyakannya saat klarifikasi atau wawancara bila diperlukan. Draft tersimpan otomatis setiap 30 detik.
             </p>
             <p>
               <span className="font-medium">Setelah dikirim:</span> Tim Assessment TI menelaah kebutuhan ini, lalu dapat meminta klarifikasi, menjadwalkan
@@ -280,23 +290,23 @@ export function NeedForm({
             <Field label="Judul kebutuhan" htmlFor="title" required hint="Ringkas, maks. 200 karakter. Contoh: “Penagihan utilitas tenant masih manual”." error={fe.title}>
               <Input id="title" name="title" defaultValue={need.title} maxLength={200} />
             </Field>
-            <Field label="Proses bisnis terkait" htmlFor="businessProcess" required hint="Proses apa yang terdampak? Contoh: pembacaan meter sampai penagihan utilitas, penanganan pengaduan tenant." error={fe.businessProcess}>
-              <Textarea id="businessProcess" name="businessProcess" defaultValue={need.businessProcess ?? ""} maxLength={4000} />
+            <Field label="Pemilik proses" htmlFor="processOwner" required hint="Jabatan / nama pejabat yang bertanggung jawab atas proses. Terisi awal dari Profil Bagian; ubah bila berbeda." error={fe.processOwner}>
+              <Input id="processOwner" name="processOwner" defaultValue={need.processOwner ?? ""} maxLength={200} />
             </Field>
-            <div className="grid gap-5 sm:grid-cols-2">
-              <Field label="Pemilik proses" htmlFor="processOwner" required hint="Jabatan / nama pejabat yang bertanggung jawab atas proses. Terisi awal dari Profil Bagian; ubah bila berbeda." error={fe.processOwner}>
-                <Input id="processOwner" name="processOwner" defaultValue={need.processOwner ?? ""} maxLength={200} />
+            <OptionalSection open={staffMode}>
+              <Field label="Proses bisnis terkait" htmlFor="businessProcess" hint="Bila berbeda dari judul. Proses apa yang terdampak? Contoh: pembacaan meter sampai penagihan utilitas, penanganan pengaduan tenant." error={fe.businessProcess}>
+                <Textarea id="businessProcess" name="businessProcess" defaultValue={need.businessProcess ?? ""} maxLength={4000} />
               </Field>
               <Field label="Perkiraan volume" htmlFor="estimatedVolume" hint="Angka atau rentang; kosongkan bila belum diketahui. Contoh: ±300 tagihan/bulan." error={fe.estimatedVolume}>
                 <Input id="estimatedVolume" name="estimatedVolume" defaultValue={need.estimatedVolume ?? ""} maxLength={200} />
               </Field>
-            </div>
-            <Field label="Pihak terdampak / pengguna" hint="Pilih semua yang relevan.">
-              <CheckboxGroup name="affectedParties" options={AFFECTED_PARTIES} value={affected} onChange={setAffected} />
-            </Field>
-            <Field label="Frekuensi proses">
-              <RadioGroup name="frequency" options={FREQUENCY} value={frequency} onChange={setFrequency} inline />
-            </Field>
+              <Field label="Pihak terdampak / pengguna" hint="Pilih semua yang relevan.">
+                <CheckboxGroup name="affectedParties" options={AFFECTED_PARTIES} value={affected} onChange={setAffected} />
+              </Field>
+              <Field label="Frekuensi proses">
+                <RadioGroup name="frequency" options={FREQUENCY} value={frequency} onChange={setFrequency} inline />
+              </Field>
+            </OptionalSection>
           </div>
 
           {/* ---------------- Langkah 2 ---------------- */}
@@ -311,22 +321,17 @@ export function NeedForm({
             <Field label="Dampak masalah" required hint="Pilih minimal satu." error={fe.impacts}>
               <CheckboxGroup name="impacts" options={IMPACTS} value={impacts} onChange={setImpacts} />
             </Field>
-            <Field label="Seberapa sering masalah terjadi?">
-              <RadioGroup name="problemFrequency" options={PROBLEM_FREQUENCY} value={problemFreq} onChange={setProblemFreq} inline />
-            </Field>
-            <Field
-              label="Apa dampaknya jika masalah tidak ditangani?"
-              htmlFor="consequenceIfUnresolved"
-              required
-              hint="Sebutkan akibat yang nyata, dengan angka bila ada. Contoh: “Tunggakan tenant naik ±Rp200 juta/bulan karena tagihan terlambat terbit, dan menjadi temuan audit dua tahun berturut-turut.” Hindari jawaban umum seperti “pekerjaan lambat”."
-              error={fe.consequenceIfUnresolved}
-            >
-              <Textarea id="consequenceIfUnresolved" name="consequenceIfUnresolved" defaultValue={need.consequenceIfUnresolved ?? ""} maxLength={4000} />
-            </Field>
-            <Field label="Apakah ada contoh atau bukti pendukung?" hint="Bukti dapat diunggah pada bagian Lampiran di bawah. Samarkan data pribadi / rahasia yang tidak diperlukan." error={fe.evidenceAvailable}>
-              <RadioGroup name="evidenceAvailable" options={YES_NO_NA} value={evidence} onChange={setEvidence} inline />
-            </Field>
-            {evidence === "yes" && attachmentsSlot && <div className="rounded-md border border-border bg-slate-50 p-4">{attachmentsSlot}</div>}
+            {/* Digabung ke "alasan urgensi"; isian lama tetap tersimpan. */}
+            <input type="hidden" name="consequenceIfUnresolved" value={need.consequenceIfUnresolved ?? ""} />
+            <OptionalSection open={staffMode}>
+              <Field label="Seberapa sering masalah terjadi?">
+                <RadioGroup name="problemFrequency" options={PROBLEM_FREQUENCY} value={problemFreq} onChange={setProblemFreq} inline />
+              </Field>
+              <Field label="Apakah ada contoh atau bukti pendukung?" hint="Bukti dapat diunggah pada bagian Lampiran di bawah. Samarkan data pribadi / rahasia yang tidak diperlukan." error={fe.evidenceAvailable}>
+                <RadioGroup name="evidenceAvailable" options={YES_NO_NA} value={evidence} onChange={setEvidence} inline />
+              </Field>
+              {evidence === "yes" && attachmentsSlot && <div className="rounded-md border border-border bg-slate-50 p-4">{attachmentsSlot}</div>}
+            </OptionalSection>
           </div>
 
           {/* ---------------- Langkah 3 ---------------- */}
@@ -335,120 +340,124 @@ export function NeedForm({
             <Field label="Perubahan atau hasil apa yang ingin dicapai?" htmlFor="desiredOutcome" required hint="Tulis hasil yang ingin dicapai, bukan fitur aplikasinya. Contoh: “tagihan terbit H+1 setelah pembacaan meter”." error={fe.desiredOutcome}>
               <Textarea id="desiredOutcome" name="desiredOutcome" defaultValue={need.desiredOutcome ?? ""} maxLength={4000} className="min-h-[120px]" />
             </Field>
-            <Field label="Usulan solusi (opsional)" hint="Boleh memilih “Belum tahu”. Solusi akhir ditentukan setelah validasi.">
-              <CheckboxGroup name="proposedSolution" options={PROPOSED_SOLUTION} value={solutions} onChange={setSolutions} />
-            </Field>
-            <Field label="Apakah kebutuhan ini terkait dengan sistem yang sudah ada?">
-              <RadioGroup name="existingSystemRelation" options={YES_NO_UNKNOWN} value={existingSys} onChange={setExistingSys} inline />
-            </Field>
-            {existingSys === "yes" && (
-              <Field label="Jelaskan sistem yang terkait" htmlFor="existingSystemDetail" required error={fe.existingSystemDetail}>
-                <Textarea id="existingSystemDetail" name="existingSystemDetail" defaultValue={need.existingSystemDetail ?? ""} maxLength={4000} />
+            <OptionalSection open={staffMode}>
+              <Field label="Usulan solusi" hint="Boleh memilih “Belum tahu”. Solusi akhir ditentukan setelah validasi.">
+                <CheckboxGroup name="proposedSolution" options={PROPOSED_SOLUTION} value={solutions} onChange={setSolutions} />
               </Field>
-            )}
-            {existingSys !== "yes" && <input type="hidden" name="existingSystemDetail" value={need.existingSystemDetail ?? ""} />}
-            <Field label="Data yang diperlukan atau dihasilkan" htmlFor="dataRequired" hint="Contoh: data meter, kontrak tenant, master aset." error={fe.dataRequired}>
-              <Textarea id="dataRequired" name="dataRequired" defaultValue={need.dataRequired ?? ""} maxLength={4000} />
-            </Field>
-            <Field label="Apakah diperlukan pertukaran data dengan Bagian / sistem lain?">
-              <RadioGroup name="integrationRequired" options={YES_NO_UNKNOWN} value={integration} onChange={setIntegration} inline />
-            </Field>
-            {integration === "yes" ? (
-              <Field label="Sebutkan Bagian / sistem yang bertukar data" htmlFor="integrationDetail" required error={fe.integrationDetail}>
-                <Textarea id="integrationDetail" name="integrationDetail" defaultValue={need.integrationDetail ?? ""} maxLength={4000} />
+              <Field label="Apakah kebutuhan ini terkait dengan sistem yang sudah ada?">
+                <RadioGroup name="existingSystemRelation" options={YES_NO_UNKNOWN} value={existingSys} onChange={setExistingSys} inline />
               </Field>
-            ) : (
-              <input type="hidden" name="integrationDetail" value={need.integrationDetail ?? ""} />
-            )}
-            <Field label="Apakah terdapat data sensitif / pribadi / rahasia atau data kritis?" hint="Jelaskan jenisnya saja; jangan mengunggah data sensitif yang tidak diperlukan.">
-              <RadioGroup name="sensitiveDataFlag" options={YES_NO_UNKNOWN} value={sensitive} onChange={setSensitive} inline />
-            </Field>
-            {sensitive === "yes" ? (
-              <Field label="Jenis data sensitif" htmlFor="sensitiveDataDetail" required error={fe.sensitiveDataDetail}>
-                <Textarea id="sensitiveDataDetail" name="sensitiveDataDetail" defaultValue={need.sensitiveDataDetail ?? ""} maxLength={4000} />
+              {existingSys === "yes" && (
+                <Field label="Jelaskan sistem yang terkait" htmlFor="existingSystemDetail" required error={fe.existingSystemDetail}>
+                  <Textarea id="existingSystemDetail" name="existingSystemDetail" defaultValue={need.existingSystemDetail ?? ""} maxLength={4000} />
+                </Field>
+              )}
+              {existingSys !== "yes" && <input type="hidden" name="existingSystemDetail" value={need.existingSystemDetail ?? ""} />}
+              <Field label="Data yang diperlukan atau dihasilkan" htmlFor="dataRequired" hint="Contoh: data meter, kontrak tenant, master aset." error={fe.dataRequired}>
+                <Textarea id="dataRequired" name="dataRequired" defaultValue={need.dataRequired ?? ""} maxLength={4000} />
               </Field>
-            ) : (
-              <input type="hidden" name="sensitiveDataDetail" value={need.sensitiveDataDetail ?? ""} />
-            )}
-            <Field label="Apakah proses memerlukan akses dari lapangan / perangkat mobile?">
-              <RadioGroup name="mobileFieldNeed" options={YES_NO_UNKNOWN} value={mobile} onChange={setMobile} inline />
-            </Field>
+              <Field label="Apakah diperlukan pertukaran data dengan Bagian / sistem lain?">
+                <RadioGroup name="integrationRequired" options={YES_NO_UNKNOWN} value={integration} onChange={setIntegration} inline />
+              </Field>
+              {integration === "yes" ? (
+                <Field label="Sebutkan Bagian / sistem yang bertukar data" htmlFor="integrationDetail" required error={fe.integrationDetail}>
+                  <Textarea id="integrationDetail" name="integrationDetail" defaultValue={need.integrationDetail ?? ""} maxLength={4000} />
+                </Field>
+              ) : (
+                <input type="hidden" name="integrationDetail" value={need.integrationDetail ?? ""} />
+              )}
+              <Field label="Apakah terdapat data sensitif / pribadi / rahasia atau data kritis?" hint="Jelaskan jenisnya saja; jangan mengunggah data sensitif yang tidak diperlukan.">
+                <RadioGroup name="sensitiveDataFlag" options={YES_NO_UNKNOWN} value={sensitive} onChange={setSensitive} inline />
+              </Field>
+              {sensitive === "yes" ? (
+                <Field label="Jenis data sensitif" htmlFor="sensitiveDataDetail" required error={fe.sensitiveDataDetail}>
+                  <Textarea id="sensitiveDataDetail" name="sensitiveDataDetail" defaultValue={need.sensitiveDataDetail ?? ""} maxLength={4000} />
+                </Field>
+              ) : (
+                <input type="hidden" name="sensitiveDataDetail" value={need.sensitiveDataDetail ?? ""} />
+              )}
+              <Field label="Apakah proses memerlukan akses dari lapangan / perangkat mobile?">
+                <RadioGroup name="mobileFieldNeed" options={YES_NO_UNKNOWN} value={mobile} onChange={setMobile} inline />
+              </Field>
+            </OptionalSection>
           </div>
 
           {/* ---------------- Langkah 4 ---------------- */}
           <div className={step === 4 ? "space-y-5" : "hidden"}>
-            <StepTitle n={4} title="Manfaat, urgensi, dan kesiapan" required={requiredOnStep(4)} autosave={!staffMode} />
-            <fieldset className="space-y-3 rounded-md border border-border p-4">
-              <legend className="px-1 text-sm font-medium">Ukuran keberhasilan (opsional)</legend>
-              <p className="text-xs text-muted">
-                Satu angka yang paling menggambarkan masalahnya, bila diketahui. Contoh: waktu penerbitan tagihan, 5 → 1 hari kerja. Boleh dikosongkan;
-                Tim Assessment dapat membantu menentukannya saat wawancara.
-              </p>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Field label="Apa yang diukur" htmlFor="metricName" hint="Contoh: waktu penerbitan tagihan." error={fe.metricName}>
-                  <Input id="metricName" name="metricName" defaultValue={need.metricName ?? ""} maxLength={200} />
-                </Field>
-                <Field label="Satuan" htmlFor="metricUnit" hint="Contoh: hari kerja, kesalahan/bulan, Rp juta." error={fe.metricUnit}>
-                  <Input id="metricUnit" name="metricUnit" defaultValue={need.metricUnit ?? ""} maxLength={64} />
-                </Field>
-                <Field label="Angka saat ini" htmlFor="baselineValue" error={fe.baselineValue}>
-                  <Input id="baselineValue" name="baselineValue" type="number" step="any" inputMode="decimal" defaultValue={need.baselineValue ?? ""} />
-                </Field>
-                <Field label="Angka target" htmlFor="targetValue" error={fe.targetValue}>
-                  <Input id="targetValue" name="targetValue" type="number" step="any" inputMode="decimal" defaultValue={need.targetValue ?? ""} />
-                </Field>
-              </div>
-              <Field label="Keterangan (opsional)" htmlFor="baseline" hint="Konteks angka di atas, atau kondisi saat ini bila belum ada angkanya." error={fe.baseline}>
-                <Textarea id="baseline" name="baseline" defaultValue={need.baseline ?? ""} maxLength={4000} className="min-h-[72px]" />
-              </Field>
-              {/* Isian target teks dari versi formulir lama dipertahankan apa adanya. */}
-              <input type="hidden" name="target" value={need.target ?? ""} />
-            </fieldset>
+            <StepTitle n={4} title="Urgensi dan kesiapan" required={requiredOnStep(4)} autosave={!staffMode} />
             <Field label="Urgensi menurut Bagian" required hint="Pilih sesuai definisi agar kebutuhan dapat dibandingkan secara adil antar-Bagian." error={fe.respondentUrgency}>
               <RadioGroup name="respondentUrgency" options={URGENCY} value={urgency} onChange={setUrgency} />
             </Field>
             <Field
-              label="Alasan urgensi"
+              label="Mengapa mendesak, dan apa akibatnya bila tidak ditangani?"
               htmlFor="urgencyReason"
               required
-              hint="Jelaskan mengapa tingkat urgensi itu yang dipilih. Contoh: “Regulator mewajibkan laporan elektronik mulai Maret 2027, sedangkan saat ini laporan disusun manual selama 5 hari kerja.”"
+              hint="Sebutkan akibat yang nyata, dengan angka bila ada. Contoh: “Tunggakan tenant naik ±Rp200 juta/bulan karena tagihan terlambat terbit, dan regulator mewajibkan laporan elektronik mulai Maret 2027.” Hindari jawaban umum seperti “pekerjaan lambat”."
               error={fe.urgencyReason}
             >
-              <Textarea id="urgencyReason" name="urgencyReason" defaultValue={need.urgencyReason ?? ""} maxLength={4000} />
+              <Textarea id="urgencyReason" name="urgencyReason" defaultValue={need.urgencyReason ?? ""} maxLength={4000} className="min-h-[120px]" />
             </Field>
-            <Field label="Tenggat eksternal atau ketergantungan waktu" htmlFor="externalDeadline" hint="Opsional. Contoh: kewajiban pelaporan regulator Maret 2027." error={fe.externalDeadline}>
-              <Input id="externalDeadline" name="externalDeadline" defaultValue={need.externalDeadline ?? ""} maxLength={200} />
-            </Field>
-            {previous && !staffMode && (
-              <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border bg-slate-50 px-3 py-2 text-sm">
-                <span className="text-muted">
-                  Kesiapan biasanya sama untuk kebutuhan dalam satu Bagian. Sumber: {previous.needCode ?? "draft"} · {previous.title || "tanpa judul"}
-                </span>
-                <Button type="button" variant="outline" size="sm" onClick={copyFromPrevious}>
-                  <Copy className="h-4 w-4" /> Salin dari kebutuhan sebelumnya
-                </Button>
+            <OptionalSection open={staffMode}>
+              <fieldset className="space-y-3 rounded-md border border-border p-4">
+                <legend className="px-1 text-sm font-medium">Ukuran keberhasilan</legend>
+                <p className="text-xs text-muted">
+                  Satu angka yang paling menggambarkan masalahnya, bila diketahui. Contoh: waktu penerbitan tagihan, 5 → 1 hari kerja. Boleh dikosongkan;
+                  Tim Assessment dapat membantu menentukannya saat wawancara.
+                </p>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Field label="Apa yang diukur" htmlFor="metricName" hint="Contoh: waktu penerbitan tagihan." error={fe.metricName}>
+                    <Input id="metricName" name="metricName" defaultValue={need.metricName ?? ""} maxLength={200} />
+                  </Field>
+                  <Field label="Satuan" htmlFor="metricUnit" hint="Contoh: hari kerja, kesalahan/bulan, Rp juta." error={fe.metricUnit}>
+                    <Input id="metricUnit" name="metricUnit" defaultValue={need.metricUnit ?? ""} maxLength={64} />
+                  </Field>
+                  <Field label="Angka saat ini" htmlFor="baselineValue" error={fe.baselineValue}>
+                    <Input id="baselineValue" name="baselineValue" type="number" step="any" inputMode="decimal" defaultValue={need.baselineValue ?? ""} />
+                  </Field>
+                  <Field label="Angka target" htmlFor="targetValue" error={fe.targetValue}>
+                    <Input id="targetValue" name="targetValue" type="number" step="any" inputMode="decimal" defaultValue={need.targetValue ?? ""} />
+                  </Field>
+                </div>
+                <Field label="Keterangan (opsional)" htmlFor="baseline" hint="Konteks angka di atas, atau kondisi saat ini bila belum ada angkanya." error={fe.baseline}>
+                  <Textarea id="baseline" name="baseline" defaultValue={need.baseline ?? ""} maxLength={4000} className="min-h-[72px]" />
+                </Field>
+                {/* Isian target teks dari versi formulir lama dipertahankan apa adanya. */}
+                <input type="hidden" name="target" value={need.target ?? ""} />
+              </fieldset>
+              <Field label="Tenggat eksternal atau ketergantungan waktu" htmlFor="externalDeadline" hint="Contoh: kewajiban pelaporan regulator Maret 2027." error={fe.externalDeadline}>
+                <Input id="externalDeadline" name="externalDeadline" defaultValue={need.externalDeadline ?? ""} maxLength={200} />
+              </Field>
+              {previous && !staffMode && (
+                <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border bg-slate-50 px-3 py-2 text-sm">
+                  <span className="text-muted">
+                    Kesiapan biasanya sama untuk kebutuhan dalam satu Bagian. Sumber: {previous.needCode ?? "draft"} · {previous.title || "tanpa judul"}
+                  </span>
+                  <Button type="button" variant="outline" size="sm" onClick={copyFromPrevious}>
+                    <Copy className="h-4 w-4" /> Salin dari kebutuhan sebelumnya
+                  </Button>
+                </div>
+              )}
+              <div className="grid gap-5 lg:grid-cols-3">
+                <Field label="Kesiapan data">
+                  <RadioGroup name="dataReadiness" options={DATA_READINESS} value={dataReady} onChange={setDataReady} />
+                </Field>
+                <Field label="Kesiapan proses / SOP">
+                  <RadioGroup name="processReadiness" options={PROCESS_READINESS} value={procReady} onChange={setProcReady} />
+                </Field>
+                <Field label="Ketersediaan pemilik proses untuk terlibat">
+                  <RadioGroup name="ownerReadiness" options={OWNER_READINESS} value={ownerReady} onChange={setOwnerReady} />
+                </Field>
               </div>
-            )}
-            <div className="grid gap-5 lg:grid-cols-3">
-              <Field label="Kesiapan data">
-                <RadioGroup name="dataReadiness" options={DATA_READINESS} value={dataReady} onChange={setDataReady} />
+              <Field label="Ketergantungan kepada Bagian atau pihak lain" htmlFor="dependencies" error={fe.dependencies}>
+                <Textarea id="dependencies" name="dependencies" defaultValue={need.dependencies ?? ""} maxLength={4000} />
               </Field>
-              <Field label="Kesiapan proses / SOP">
-                <RadioGroup name="processReadiness" options={PROCESS_READINESS} value={procReady} onChange={setProcReady} />
+              <Field label="Perkiraan biaya jika diketahui" htmlFor="estimatedCost" hint="Tidak perlu membuat estimasi teknis." error={fe.estimatedCost}>
+                <Input id="estimatedCost" name="estimatedCost" defaultValue={need.estimatedCost ?? ""} maxLength={200} />
               </Field>
-              <Field label="Ketersediaan pemilik proses untuk terlibat">
-                <RadioGroup name="ownerReadiness" options={OWNER_READINESS} value={ownerReady} onChange={setOwnerReady} />
+              <Field label="Catatan tambahan" htmlFor="additionalNotes" error={fe.additionalNotes}>
+                <Textarea id="additionalNotes" name="additionalNotes" defaultValue={need.additionalNotes ?? ""} maxLength={4000} />
               </Field>
-            </div>
-            <Field label="Ketergantungan kepada Bagian atau pihak lain" htmlFor="dependencies" error={fe.dependencies}>
-              <Textarea id="dependencies" name="dependencies" defaultValue={need.dependencies ?? ""} maxLength={4000} />
-            </Field>
-            <Field label="Perkiraan biaya jika diketahui" htmlFor="estimatedCost" hint="Opsional. Tidak perlu membuat estimasi teknis." error={fe.estimatedCost}>
-              <Input id="estimatedCost" name="estimatedCost" defaultValue={need.estimatedCost ?? ""} maxLength={200} />
-            </Field>
-            <Field label="Catatan tambahan" htmlFor="additionalNotes" error={fe.additionalNotes}>
-              <Textarea id="additionalNotes" name="additionalNotes" defaultValue={need.additionalNotes ?? ""} maxLength={4000} />
-            </Field>
+            </OptionalSection>
             {attachmentsSlot && (
               <div className="rounded-md border border-border bg-slate-50 p-4">
                 <p className="mb-2 text-sm font-medium">Lampiran pendukung (opsional, privat)</p>
@@ -527,5 +536,18 @@ function StepTitle({ n, title, required, autosave }: { n: number; title: string;
         {autosave && " Draft tersimpan otomatis setiap 30 detik dan saat berpindah langkah."}
       </p>
     </div>
+  );
+}
+
+/** Kolom opsional yang tertutup secara default agar responden fokus pada kolom wajib. */
+function OptionalSection({ open, children }: { open?: boolean; children: React.ReactNode }) {
+  return (
+    <details open={open} className="rounded-md border border-dashed border-border">
+      <summary className="cursor-pointer select-none px-4 py-3 text-sm font-medium">
+        Detail tambahan (opsional)
+        <span className="block text-xs font-normal text-muted">Boleh dilewati. Tim Assessment dapat melengkapinya bersama Anda saat wawancara.</span>
+      </summary>
+      <div className="space-y-5 border-t border-border px-4 py-4">{children}</div>
+    </details>
   );
 }

@@ -39,7 +39,7 @@ export function NeedDetail({ need }: { need: DigitalNeed }) {
               items={[
                 { label: "Dampak masalah", value: labelsOf(IMPACTS, need.impacts) },
                 { label: "Frekuensi masalah", value: labelOf(PROBLEM_FREQUENCY, need.problemFrequency) },
-                { label: "Dampak jika tidak ditangani", value: need.consequenceIfUnresolved },
+                ...(need.consequenceIfUnresolved ? [{ label: "Dampak jika tidak ditangani (isian lama)", value: need.consequenceIfUnresolved }] : []),
                 { label: "Bukti pendukung", value: labelOf(YES_NO_NA, need.evidenceAvailable) },
               ]}
             />
@@ -74,7 +74,7 @@ export function NeedDetail({ need }: { need: DigitalNeed }) {
               { label: "Ukuran keberhasilan", value: formatMetric(need) },
               { label: "Keterangan kondisi saat ini", value: need.baseline },
               ...(need.target ? [{ label: "Target (isian lama)", value: need.target }] : []),
-              { label: "Alasan urgensi", value: need.urgencyReason },
+              { label: "Alasan urgensi & akibat bila tidak ditangani", value: need.urgencyReason },
               { label: "Tenggat eksternal", value: need.externalDeadline },
               { label: "Kesiapan data", value: labelOf(DATA_READINESS, need.dataReadiness) },
               { label: "Kesiapan proses / SOP", value: labelOf(PROCESS_READINESS, need.processReadiness) },
