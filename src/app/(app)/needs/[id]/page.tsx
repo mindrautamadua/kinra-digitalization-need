@@ -15,7 +15,7 @@ import { ThreadPanel } from "@/components/needs/thread";
 import { ReviewForm } from "@/components/needs/review-form";
 import { StatusPanel } from "@/components/needs/status-panel";
 import { postClarificationAction } from "@/actions/review";
-import { formatDate } from "@/lib/utils";
+import { formatDate, needCodeLabel } from "@/lib/utils";
 import { INTERVIEW_STATUS_LABELS, USERS_RANGE, WORK_MODE, labelOf } from "@/lib/enums";
 import { priorityCategory, scoreBreakdown } from "@/lib/scoring";
 import { SCORE_CRITERIA } from "@/lib/enums";
@@ -30,7 +30,7 @@ export default async function StaffNeedPage({ params }: { params: Promise<{ id: 
   if (!staff && !mgmtDetails) {
     return (
       <>
-        <PageHeader title={need.needCode} />
+        <PageHeader title={needCodeLabel(need.needCode)} />
         <p className="text-sm text-muted">Akses detail kebutuhan untuk Manajemen tidak diaktifkan. Hubungi Administrator TI.</p>
       </>
     );
@@ -48,7 +48,7 @@ export default async function StaffNeedPage({ params }: { params: Promise<{ id: 
       <PageHeader
         title={
           <span className="flex flex-wrap items-center gap-2">
-            <span className="font-mono text-base text-muted">{need.needCode}</span>
+            <span className="font-mono text-base text-muted">{needCodeLabel(need.needCode)}</span>
             <span>{need.title || "(tanpa judul)"}</span>
           </span>
         }
@@ -99,7 +99,7 @@ export default async function StaffNeedPage({ params }: { params: Promise<{ id: 
           </Card>
           <NeedDetail need={need} />
           {staff ? (
-            <ReviewForm needId={need.id} review={need.review ?? null} relatedCodes={relatedCodes.map((r) => r.needCode)} weights={weights} thresholds={thresholds} />
+            <ReviewForm needId={need.id} review={need.review ?? null} relatedCodes={relatedCodes.flatMap((r) => (r.needCode ? [r.needCode] : []))} domainTags={need.domainTags} weights={weights} thresholds={thresholds} />
           ) : (
             need.review && (
               <Card>
@@ -130,7 +130,7 @@ export default async function StaffNeedPage({ params }: { params: Promise<{ id: 
               <CardBody className="space-y-1 text-sm">
                 {relatedCodes.map((r) => (
                   <Link key={r.id} href={`/needs/${r.id}`} className="block text-primary hover:underline">
-                    <span className="font-mono text-xs">{r.needCode}</span> {r.title}
+                    <span className="font-mono text-xs">{needCodeLabel(r.needCode)}</span> {r.title}
                   </Link>
                 ))}
               </CardBody>

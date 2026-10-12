@@ -12,9 +12,11 @@ import { departmentRespondentIds, notifyUsers, staffIds } from "@/lib/notify";
 import { getSetting } from "@/lib/settings";
 import { computeWeightedScore } from "@/lib/scoring";
 import { NOTIFY_RESPONDENT, REASON_REQUIRED, STAFF_TRANSITIONS } from "@/lib/workflow";
-import { NEED_STATUS_LABELS, COMPLETENESS, ROOT_CAUSE, DUPLICATE_STATUS, SOLUTION_CATEGORY, STRATEGIC_ALIGNMENT, DELAY_RISK, FOLLOW_UP } from "@/lib/enums";
+import { NEED_STATUS_LABELS, COMPLETENESS, ROOT_CAUSE, DUPLICATE_STATUS, SOLUTION_CATEGORY, STRATEGIC_ALIGNMENT, DELAY_RISK, DOMAIN_TAGS, FOLLOW_UP } from "@/lib/enums";
 import { needDraftSchema, needFormDataToObject } from "@/lib/validation/need";
 import type { FormState } from "./respond";
+
+const DOMAIN_VALUES = DOMAIN_TAGS.map((o) => o.value) as [string, ...string[]];
 
 function msg(e: unknown) {
   return e instanceof AuthError ? e.message : e instanceof Error ? e.message : "Terjadi kesalahan.";
@@ -127,6 +129,8 @@ export async function saveReviewAction(needId: string, _prev: FormState, fd: For
     const raw: Record<string, unknown> = {};
     for (const k of Object.keys(reviewSchema.shape)) raw[k] = k === "criticalFlag" ? fd.get(k) === "on" : String(fd.get(k) ?? "");
     const parsed = reviewSchema.safeParse(raw);
+    const domains = z.array(z.enum(DOMAIN_VALUES)).safeParse(fd.getAll("domainTags").map(String));
+    if (!domains.success) return { error: "Kaitan domain KINRA tidak valid." };
     if (!parsed.success) return { error: parsed.error.issues.map((i) => `${String(i.path[0])}: ${i.message}`).join("; ") };
     const d = parsed.data;
     if (d.criticalFlag && !d.criticalReason) return { error: "Alasan penandaan risiko kritis wajib diisi." };
@@ -181,6 +185,10 @@ export async function saveReviewAction(needId: string, _prev: FormState, fd: For
         .insert(needReviews)
         .values(values)
         .onConflictDoUpdate({ target: needReviews.needId, set: values });
+      // Kaitan domain diklasifikasikan reviewer (dipindah dari Form B).
+      if (domains.data.join() !== need.domainTags.join()) {
+        await tx.update(digitalNeeds).set({ domainTags: domains.data, updatedAt: new Date() }).where(eq(digitalNeeds.id, needId));
+      }
       const scoreChanged =
         !before ||
         before.weightedScore !== values.weightedScore ||
@@ -191,7 +199,14 @@ export async function saveReviewAction(needId: string, _prev: FormState, fd: For
         before.scoreReadiness !== d.scoreReadiness ||
         before.scoreReuse !== d.scoreReuse;
       await logAudit(
-        { actorUserId: me.id, action: scoreChanged ? "need_review_scored" : "need_review_saved", entityType: "need_review", entityId: needId, before: before ?? null, after: values },
+        {
+          actorUserId: me.id,
+          action: scoreChanged ? "need_review_scored" : "need_review_saved",
+          entityType: "need_review",
+          entityId: needId,
+          before: before ? { ...before, domainTags: need.domainTags } : null,
+          after: { ...values, domainTags: domains.data },
+        },
         tx,
       );
       if (d.criticalFlag && !before?.criticalFlag) {

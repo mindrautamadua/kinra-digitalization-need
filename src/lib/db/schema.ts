@@ -195,7 +195,8 @@ export const digitalNeeds = pgTable(
     submissionId: uuid("submission_id")
       .notNull()
       .references(() => departmentSubmissions.id, { onDelete: "restrict" }),
-    needCode: varchar("need_code", { length: 32 }).notNull(),
+    /** Diberikan saat pertama kali dikirim; draft yang belum pernah dikirim tidak memakai nomor. */
+    needCode: varchar("need_code", { length: 32 }),
     // Identitas dan konteks
     title: varchar("title", { length: 200 }).notNull().default(""),
     businessProcess: text("business_process"),
@@ -224,6 +225,11 @@ export const digitalNeeds = pgTable(
     domainTags: text("domain_tags").array().notNull().default([]),
     // Manfaat, urgensi, kesiapan
     expectedBenefits: text("expected_benefits").array().notNull().default([]),
+    // Ukuran keberhasilan terstruktur; `baseline` = keterangan bebas, `target` = isian teks lama (sebelum terstruktur).
+    metricName: varchar("metric_name", { length: 200 }),
+    metricUnit: varchar("metric_unit", { length: 64 }),
+    baselineValue: numeric("baseline_value", { mode: "number" }),
+    targetValue: numeric("target_value", { mode: "number" }),
     baseline: text("baseline"),
     target: text("target"),
     respondentUrgency: varchar("respondent_urgency", { length: 16 }),

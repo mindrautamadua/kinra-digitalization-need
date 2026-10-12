@@ -9,7 +9,7 @@ import { AttachmentPanel } from "@/components/needs/attachments";
 import { ThreadPanel } from "@/components/needs/thread";
 import { replyClarificationAction, deleteDraftNeedAction } from "@/actions/respond";
 import { FormMessage, SubmitButton } from "@/components/ui/form";
-import { formatDate } from "@/lib/utils";
+import { formatDate, needCodeLabel } from "@/lib/utils";
 import { INTERVIEW_STATUS_LABELS } from "@/lib/enums";
 
 export default async function RespondentNeedPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ submitted?: string }> }) {
@@ -28,7 +28,7 @@ export default async function RespondentNeedPage({ params, searchParams }: { par
       <PageHeader
         title={
           <span className="flex flex-wrap items-center gap-2">
-            <span className="font-mono text-base text-muted">{need.needCode}</span>
+            <span className="font-mono text-base text-muted">{needCodeLabel(need.needCode)}</span>
             <span>{need.title || "(tanpa judul)"}</span>
           </span>
         }

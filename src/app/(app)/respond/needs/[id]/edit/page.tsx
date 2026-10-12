@@ -1,6 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import { requireRole } from "@/lib/auth/guard";
-import { loadNeedFor, RESPONDENT_EDITABLE } from "@/lib/queries/respond";
+import { loadNeedFor, previousNeedFor, RESPONDENT_EDITABLE } from "@/lib/queries/respond";
 import { PageHeader } from "@/components/ui/card";
 import { StatusBadge } from "@/components/ui/badge";
 import { NeedForm } from "@/components/needs/need-form";
@@ -16,6 +16,7 @@ export default async function EditNeedPage({ params }: { params: Promise<{ id: s
   if (!need || need.status === "archived") notFound();
   if (!RESPONDENT_EDITABLE.has(need.status) || need.submission.period.status !== "active") redirect(`/respond/needs/${id}`);
   const maxMb = Number(process.env.MAX_UPLOAD_MB ?? 10);
+  const previous = await previousNeedFor(need.submissionId, need.id);
   const { submission, review, attachments, threads, interviews, ...plain } = need;
   void submission; void review; void threads; void interviews;
   return (
@@ -23,11 +24,11 @@ export default async function EditNeedPage({ params }: { params: Promise<{ id: s
       <PageHeader
         title={
           <span className="flex flex-wrap items-center gap-2">
-            <span className="font-mono text-base text-muted">{need.needCode}</span>
+            {need.needCode && <span className="font-mono text-base text-muted">{need.needCode}</span>}
             <span>Form B — Kebutuhan Digitalisasi</span>
           </span>
         }
-        description={`${need.submission.department.name} · Periode ${need.submission.period.name} · Perkiraan waktu pengisian 10–15 menit.`}
+        description={`${need.submission.department.name} · Periode ${need.submission.period.name}${need.needCode ? "" : " · Kode kebutuhan diberikan saat dikirim."}`}
         actions={<StatusBadge status={need.status} />}
       />
       {need.statusReason && need.status !== "draft" && (
@@ -35,7 +36,7 @@ export default async function EditNeedPage({ params }: { params: Promise<{ id: s
           <FormMessage tone="info" message={`Catatan Tim Assessment: ${need.statusReason}`} />
         </div>
       )}
-      <NeedForm need={plain} attachmentsSlot={<AttachmentPanel needId={need.id} attachments={attachments} canEdit maxMb={maxMb} />} />
+      <NeedForm need={plain} previous={previous ?? undefined} attachmentsSlot={<AttachmentPanel needId={need.id} attachments={attachments} canEdit maxMb={maxMb} />} />
     </>
   );
 }

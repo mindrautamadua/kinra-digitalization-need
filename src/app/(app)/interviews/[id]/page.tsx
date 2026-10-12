@@ -8,6 +8,7 @@ import { PageHeader } from "@/components/ui/card";
 import { LinkButton } from "@/components/ui/button";
 import { InterviewForm } from "@/components/needs/interview-form";
 import { updateInterviewAction } from "@/actions/interviews";
+import { needCodeLabel } from "@/lib/utils";
 
 export const metadata = { title: "Detail Wawancara" };
 
@@ -21,7 +22,7 @@ export default async function InterviewPage({ params }: { params: Promise<{ id: 
   return (
     <>
       <PageHeader
-        title={`Wawancara · ${interview.need.needCode}`}
+        title={`Wawancara · ${needCodeLabel(interview.need.needCode)}`}
         description={interview.need.title}
         actions={
           <LinkButton href={`/needs/${interview.needId}`} variant="outline" size="sm">

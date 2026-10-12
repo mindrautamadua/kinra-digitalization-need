@@ -8,6 +8,13 @@ import { FormMessage, SubmitButton } from "@/components/ui/form";
 export function LoginForm({ next }: { next?: string }) {
   const [state, action] = useActionState(loginAction, undefined);
   const [showPassword, setShowPassword] = useState(false);
+  // Hitung respons agar animasi goyang diputar ulang pada setiap gagal masuk.
+  const [attempt, setAttempt] = useState(0);
+  const [seenState, setSeenState] = useState(state);
+  if (state !== seenState) {
+    setSeenState(state);
+    setAttempt((n) => n + 1);
+  }
   return (
     <form action={action} className="space-y-5">
       <input type="hidden" name="next" value={next ?? ""} />
@@ -32,7 +39,11 @@ export function LoginForm({ next }: { next?: string }) {
           </button>
         </div>
       </Field>
-      <FormMessage message={state?.error} />
+      {state?.error && (
+        <div key={attempt} className="kn-shake">
+          <FormMessage message={state.error} />
+        </div>
+      )}
       <SubmitButton className="group h-11 w-full" pendingText="Memeriksa…">
         Masuk
         <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" aria-hidden />

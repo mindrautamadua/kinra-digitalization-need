@@ -51,3 +51,150 @@ body {
     display: none !important;
   }
 }
+
+/* ---------- Animasi halaman login (prefix kn-) ---------- */
+@keyframes kn-rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes kn-draw {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes kn-fill {
+  0%,
+  100% {
+    fill-opacity: 0;
+  }
+  50% {
+    fill-opacity: 0.14;
+  }
+}
+@keyframes kn-flow {
+  to {
+    stroke-dashoffset: -24;
+  }
+}
+@keyframes kn-ping {
+  from {
+    transform: scale(1);
+    opacity: 0.7;
+  }
+  to {
+    transform: scale(4.5);
+    opacity: 0;
+  }
+}
+@keyframes kn-scan {
+  from {
+    transform: translateY(-10%);
+  }
+  to {
+    transform: translateY(110%);
+  }
+}
+@keyframes kn-step {
+  0%,
+  30% {
+    opacity: 1;
+    --kn-bar: 1;
+  }
+  36%,
+  100% {
+    opacity: 0.5;
+    --kn-bar: 0;
+  }
+}
+@keyframes kn-shake {
+  0%,
+  100% {
+    transform: none;
+  }
+  20%,
+  60% {
+    transform: translateX(-6px);
+  }
+  40%,
+  80% {
+    transform: translateX(6px);
+  }
+}
+@property --kn-bar {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 0;
+}
+
+.kn-rise {
+  animation: kn-rise 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: var(--kn-delay, 0s);
+}
+.kn-draw {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: kn-draw 1.6s cubic-bezier(0.65, 0, 0.35, 1) forwards;
+  animation-delay: var(--kn-delay, 0s);
+}
+.kn-fill {
+  fill-opacity: 0;
+  animation: kn-fill 6s ease-in-out infinite;
+  animation-delay: var(--kn-delay, 0s);
+}
+.kn-flow {
+  animation: kn-flow 1.2s linear infinite;
+}
+.kn-ping {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: kn-ping 2.4s cubic-bezier(0, 0, 0.2, 1) infinite;
+  animation-delay: var(--kn-delay, 0s);
+}
+.kn-scan {
+  animation: kn-scan 7s linear infinite;
+}
+.kn-step {
+  animation: kn-step 9s ease-in-out infinite;
+  animation-delay: var(--kn-delay, 0s);
+}
+.kn-step-bar {
+  transform: scaleY(var(--kn-bar));
+  transform-origin: top;
+  transition: transform 0.4s;
+}
+.kn-shake {
+  animation: kn-shake 0.4s ease-in-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kn-rise,
+  .kn-draw,
+  .kn-fill,
+  .kn-flow,
+  .kn-ping,
+  .kn-scan,
+  .kn-step,
+  .kn-shake {
+    animation: none;
+  }
+  .kn-draw {
+    stroke-dashoffset: 0;
+  }
+  .kn-step {
+    opacity: 1;
+  }
+  .kn-ping,
+  .kn-scan,
+  .kn-packet {
+    display: none;
+  }
+}

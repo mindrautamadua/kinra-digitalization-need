@@ -2,10 +2,10 @@
 import { useActionState, useMemo, useState } from "react";
 import { saveReviewAction } from "@/actions/review";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
-import { Field, Input, RadioGroup, Select, Textarea } from "@/components/ui/input";
+import { CheckboxGroup, Field, Input, RadioGroup, Select, Textarea } from "@/components/ui/input";
 import { FormMessage, SubmitButton } from "@/components/ui/form";
 import { Badge } from "@/components/ui/badge";
-import { COMPLETENESS, DELAY_RISK, DUPLICATE_STATUS, FOLLOW_UP, ROOT_CAUSE, SCORE_CRITERIA, SOLUTION_CATEGORY, STRATEGIC_ALIGNMENT, type ScoreKey } from "@/lib/enums";
+import { COMPLETENESS, DELAY_RISK, DOMAIN_TAGS, DUPLICATE_STATUS, FOLLOW_UP, ROOT_CAUSE, SCORE_CRITERIA, SOLUTION_CATEGORY, STRATEGIC_ALIGNMENT, type ScoreKey } from "@/lib/enums";
 import { computeWeightedScore, priorityCategory, type ScoreThresholds, type ScoreWeights } from "@/lib/scoring";
 import type { NeedReview } from "@/lib/db/schema";
 
@@ -13,6 +13,7 @@ export function ReviewForm({
   needId,
   review,
   relatedCodes,
+  domainTags,
   weights,
   thresholds,
   readOnly,
@@ -20,6 +21,7 @@ export function ReviewForm({
   needId: string;
   review: NeedReview | null;
   relatedCodes: string[];
+  domainTags: string[];
   weights: ScoreWeights;
   thresholds: ScoreThresholds;
   readOnly?: boolean;
@@ -40,6 +42,7 @@ export function ReviewForm({
   const [dup, setDup] = useState(review?.duplicateStatus ?? "");
   const [align, setAlign] = useState(review?.strategicAlignment ?? "");
   const [followUp, setFollowUp] = useState(review?.followUpRecommendation ?? "");
+  const [domains, setDomains] = useState<string[]>(domainTags);
 
   const live = useMemo(() => computeWeightedScore(scores, weights), [scores, weights]);
   const cat = priorityCategory(live, thresholds);
@@ -94,6 +97,9 @@ export function ReviewForm({
                 <Textarea id="delayRiskReason" name="delayRiskReason" defaultValue={review?.delayRiskReason ?? ""} maxLength={4000} className="min-h-[72px]" />
               </Field>
             </div>
+            <Field label="Kaitan domain KINRA" hint="Klasifikasi oleh reviewer; tidak lagi ditanyakan kepada responden. Pilih semua yang relevan.">
+              <CheckboxGroup name="domainTags" options={DOMAIN_TAGS} value={domains} onChange={setDomains} />
+            </Field>
             <Field label="Rekomendasi tindak lanjut">
               <RadioGroup name="followUpRecommendation" options={FOLLOW_UP} value={followUp} onChange={setFollowUp} inline />
             </Field>

@@ -95,8 +95,8 @@ export const FREQUENCY: Option[] = [
   { value: "weekly", label: "Mingguan" },
   { value: "monthly", label: "Bulanan" },
   { value: "yearly", label: "Tahunan" },
-  { value: "adhoc", label: "Ad hoc" },
-  { value: "realtime", label: "Real-time" },
+  { value: "adhoc", label: "Tidak menentu" },
+  { value: "realtime", label: "Terus-menerus" },
 ];
 
 export const IMPACTS: Option[] = [
@@ -152,14 +152,14 @@ export const DOMAIN_TAGS: Option[] = [
   { value: "estate", label: "Kawasan" },
   { value: "asset", label: "Aset" },
   { value: "infrastructure", label: "Infrastruktur" },
-  { value: "governance_finance", label: "Corporate governance, finance & reporting" },
-  { value: "procurement", label: "Procurement & vendor management" },
-  { value: "ehs", label: "Environment, health, safety & compliance" },
-  { value: "hr_admin", label: "Human resources & administration" },
-  { value: "it_cyber_data", label: "IT operations, cyber security & data" },
-  { value: "risk_control", label: "Risk management & internal control" },
-  { value: "executive", label: "Executive reporting & decision support" },
-  { value: "other", label: "Other / cross-functional" },
+  { value: "governance_finance", label: "Tata kelola, keuangan & pelaporan" },
+  { value: "procurement", label: "Pengadaan & pengelolaan vendor" },
+  { value: "ehs", label: "Lingkungan, K3 & kepatuhan" },
+  { value: "hr_admin", label: "SDM & administrasi" },
+  { value: "it_cyber_data", label: "Operasional TI, keamanan siber & data" },
+  { value: "risk_control", label: "Manajemen risiko & pengendalian internal" },
+  { value: "executive", label: "Pelaporan & pendukung keputusan manajemen" },
+  { value: "other", label: "Lainnya / lintas fungsi" },
 ];
 
 export const BENEFITS: Option[] = [
@@ -176,30 +176,30 @@ export const BENEFITS: Option[] = [
 ];
 
 export const URGENCY: Option[] = [
-  { value: "low", label: "Rendah" },
-  { value: "medium", label: "Sedang" },
-  { value: "high", label: "Tinggi" },
-  { value: "critical", label: "Kritis" },
+  { value: "low", label: "Rendah", hint: "Perbaikan yang bermanfaat, tetapi proses tetap berjalan tanpa masalah berarti bila ditunda lebih dari setahun." },
+  { value: "medium", label: "Sedang", hint: "Masalah mengganggu pekerjaan rutin; sebaiknya ditangani dalam 6–12 bulan." },
+  { value: "high", label: "Tinggi", hint: "Masalah sudah menimbulkan kerugian, keterlambatan, atau keluhan yang nyata; perlu ditangani dalam 3–6 bulan." },
+  { value: "critical", label: "Kritis", hint: "Ada tenggat regulator/hukum, risiko keselamatan atau keamanan, gangguan layanan inti, atau kehilangan pendapatan yang sedang terjadi." },
 ];
 
 export const DATA_READINESS: Option[] = [
-  { value: "ready", label: "Siap" },
-  { value: "partial", label: "Sebagian" },
-  { value: "not_ready", label: "Belum" },
+  { value: "ready", label: "Siap", hint: "Data sudah digital dalam satu sistem atau file, rapi, dan diperbarui rutin." },
+  { value: "partial", label: "Sebagian", hint: "Sebagian data digital, tetapi tersebar di beberapa file atau masih ada yang di kertas." },
+  { value: "not_ready", label: "Belum", hint: "Data sebagian besar masih di kertas atau belum dikumpulkan." },
   { value: "unknown", label: "Tidak tahu" },
 ];
 
 export const PROCESS_READINESS: Option[] = [
-  { value: "defined", label: "Terdefinisi" },
-  { value: "partial", label: "Sebagian" },
-  { value: "not_defined", label: "Belum" },
+  { value: "defined", label: "Terdefinisi", hint: "Ada SOP tertulis yang berlaku dan dijalankan sesuai praktik." },
+  { value: "partial", label: "Sebagian", hint: "SOP ada tetapi tidak lengkap atau berbeda dengan praktik di lapangan." },
+  { value: "not_defined", label: "Belum", hint: "Belum ada SOP tertulis; cara kerja bergantung pada kebiasaan masing-masing." },
   { value: "unknown", label: "Tidak tahu" },
 ];
 
 export const OWNER_READINESS: Option[] = [
-  { value: "ready", label: "Siap" },
-  { value: "limited", label: "Terbatas" },
-  { value: "not_assigned", label: "Belum ditetapkan" },
+  { value: "ready", label: "Siap", hint: "Pemilik proses sudah ditunjuk dan dapat meluangkan waktu untuk wawancara, uji coba, dan keputusan." },
+  { value: "limited", label: "Terbatas", hint: "Pemilik proses sudah ditunjuk, tetapi waktunya terbatas." },
+  { value: "not_assigned", label: "Belum ditetapkan", hint: "Belum jelas siapa yang bertanggung jawab atas proses ini." },
 ];
 
 // Form C
@@ -240,7 +240,8 @@ export const STRATEGIC_ALIGNMENT: Option[] = [
   { value: "not_assessed", label: "Belum dinilai" },
 ];
 
-export const DELAY_RISK: Option[] = URGENCY;
+/** Label sama dengan urgensi, tanpa definisi yang ditujukan untuk responden. */
+export const DELAY_RISK: Option[] = URGENCY.map(({ value, label }) => ({ value, label }));
 
 export const FOLLOW_UP: Option[] = [
   { value: "no_interview", label: "Tanpa wawancara" },

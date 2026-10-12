@@ -6,7 +6,7 @@ import { LinkButton } from "@/components/ui/button";
 import { Table, THead, TH, TD } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { INTERVIEW_STATUS_LABELS } from "@/lib/enums";
-import { formatDate, truncate } from "@/lib/utils";
+import { formatDate, truncate, needCodeLabel } from "@/lib/utils";
 
 export const metadata = { title: "Interview Tracker" };
 
@@ -52,7 +52,7 @@ export default async function InterviewsPage({ searchParams }: { searchParams: P
                 </TD>
                 <TD>
                   <Link href={`/needs/${i.need.id}`} className="hover:underline">
-                    <span className="font-mono text-xs">{i.need.needCode}</span> {truncate(i.need.title, 50)}
+                    <span className="font-mono text-xs">{needCodeLabel(i.need.needCode)}</span> {truncate(i.need.title, 50)}
                   </Link>
                 </TD>
                 <TD className="whitespace-nowrap">{i.need.submission.department.name}</TD>

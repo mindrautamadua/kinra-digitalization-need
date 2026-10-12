@@ -52,3 +52,19 @@ test("nilai enum tidak dikenal ditolak", () => {
   const r = needDraftSchema.safeParse(needFormDataToObject(fd({ respondentUrgency: "sangat-kritis" })));
   assert.equal(r.success, false);
 });
+
+test("ukuran keberhasilan: angka diubah ke number dan memerlukan nama ukuran", () => {
+  const parsed = needDraftSchema.parse(needFormDataToObject(fd({ baselineValue: "5", targetValue: "1,5" })));
+  assert.equal(parsed.baselineValue, 5);
+  assert.equal(parsed.targetValue, 1.5);
+  assert.ok(validateNeedForSubmit(parsed).metricName);
+  assert.equal(needDraftSchema.safeParse(needFormDataToObject(fd({ baselineValue: "lama" }))).success, false);
+});
+
+test("kosong menjadi null, dan kolom yang dipindah tidak ikut tersimpan", () => {
+  const parsed = needDraftSchema.parse(needFormDataToObject(fd({ domainTags: ["tenant"], expectedBenefits: ["reduce_time"] })));
+  assert.equal(parsed.baselineValue, null);
+  assert.equal(parsed.metricName, null);
+  assert.ok(!("domainTags" in parsed));
+  assert.ok(!("expectedBenefits" in parsed));
+});

@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq, ne } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { assessmentPeriods, clarificationThreads, departmentSubmissions, digitalNeeds, needAttachments, periodDepartments } from "@/lib/db/schema";
 import { actionRole, AuthError } from "@/lib/auth/guard";
@@ -100,10 +100,22 @@ export async function createNeedAction(periodId: string) {
   const me = await actionRole("respondent");
   if (!me.departmentId) throw new AuthError("Akun Anda belum terhubung ke Bagian.");
   const { sub } = await ensureSubmission(me.id, me.departmentId, periodId);
+  // Kode kebutuhan baru diberikan saat dikirim agar draft yang ditinggalkan tidak menghabiskan nomor.
+  // Pemilik proses dan kesiapan diisi awal dari Profil Bagian / kebutuhan terakhir Bagian ini; responden tetap dapat mengubahnya.
+  const prev = await db.query.digitalNeeds.findFirst({
+    where: and(eq(digitalNeeds.submissionId, sub.id), ne(digitalNeeds.status, "archived")),
+    orderBy: [desc(digitalNeeds.updatedAt)],
+    columns: { processOwner: true, dataReadiness: true, processReadiness: true, ownerReadiness: true },
+  });
+  const prefill = {
+    processOwner: prev?.processOwner || sub.processOwnerName || null,
+    dataReadiness: prev?.dataReadiness ?? null,
+    processReadiness: prev?.processReadiness ?? null,
+    ownerReadiness: prev?.ownerReadiness ?? null,
+  };
   const need = await db.transaction(async (tx) => {
-    const code = await nextNeedCode(tx);
-    const [row] = await tx.insert(digitalNeeds).values({ submissionId: sub.id, needCode: code, createdBy: me.id }).returning();
-    await logAudit({ actorUserId: me.id, action: "need_created", entityType: "digital_need", entityId: row.id, after: { needCode: code } }, tx);
+    const [row] = await tx.insert(digitalNeeds).values({ submissionId: sub.id, createdBy: me.id, ...prefill }).returning();
+    await logAudit({ actorUserId: me.id, action: "need_created", entityType: "digital_need", entityId: row.id, after: prefill }, tx);
     return row;
   });
   redirect(`/respond/needs/${need.id}/edit`);
@@ -142,21 +154,22 @@ export async function saveNeedAction(needId: string, _prev: FormState, fd: FormD
     const now = new Date();
     const wasResubmit = need.status !== "draft";
     await db.transaction(async (tx) => {
+      const needCode = need.needCode ?? (await nextNeedCode(tx));
       await tx
         .update(digitalNeeds)
-        .set({ status: "submitted", statusReason: null, submittedAt: need.submittedAt ?? now, lastSubmittedAt: now, updatedAt: now })
+        .set({ needCode, status: "submitted", statusReason: null, submittedAt: need.submittedAt ?? now, lastSubmittedAt: now, updatedAt: now })
         .where(eq(digitalNeeds.id, needId));
       await tx
         .update(departmentSubmissions)
         .set({ status: "submitted", submittedAt: sub.submittedAt ?? now, respondentId: sub.respondentId ?? me.id, updatedAt: now })
         .where(eq(departmentSubmissions.id, sub.id));
       await logAudit(
-        { actorUserId: me.id, action: wasResubmit ? "need_resubmitted" : "need_submitted", entityType: "digital_need", entityId: needId, before: { status: need.status }, after: { status: "submitted" } },
+        { actorUserId: me.id, action: wasResubmit ? "need_resubmitted" : "need_submitted", entityType: "digital_need", entityId: needId, before: { status: need.status }, after: { status: "submitted", needCode } },
         tx,
       );
       await notifyUsers(
         await staffIds(tx),
-        { title: `${wasResubmit ? "Revisi" : "Kebutuhan baru"} dikirim: ${need.needCode}`, body: parsed.data.title, link: `/needs/${needId}` },
+        { title: `${wasResubmit ? "Revisi" : "Kebutuhan baru"} dikirim: ${needCode}`, body: parsed.data.title, link: `/needs/${needId}` },
         tx,
       );
     });

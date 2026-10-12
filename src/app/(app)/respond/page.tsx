@@ -5,7 +5,7 @@ import { Card, CardBody, CardHeader, EmptyState, PageHeader } from "@/components
 import { LinkButton } from "@/components/ui/button";
 import { StatusBadge, UrgencyBadge, Badge } from "@/components/ui/badge";
 import { Table, THead, TH, TD } from "@/components/ui/table";
-import { formatDate } from "@/lib/utils";
+import { formatDate, needCodeLabel } from "@/lib/utils";
 import { createNeedAction } from "@/actions/respond";
 import { SubmitButton } from "@/components/ui/form";
 import { AlertTriangle, CheckCircle2 } from "lucide-react";
@@ -105,7 +105,7 @@ export default async function RespondPage() {
                         <tbody>
                           {needs.map((n) => (
                             <tr key={n.id} className="hover:bg-slate-50">
-                              <TD className="font-mono text-xs">{n.needCode}</TD>
+                              <TD className="font-mono text-xs">{needCodeLabel(n.needCode)}</TD>
                               <TD>
                                 <Link href={`/respond/needs/${n.id}`} className="font-medium text-primary hover:underline">
                                   {n.title || <span className="text-muted italic">(tanpa judul)</span>}

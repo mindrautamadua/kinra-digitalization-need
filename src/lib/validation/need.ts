@@ -1,6 +1,6 @@
 import { z } from "zod";
 import {
-  AFFECTED_PARTIES, BENEFITS, DATA_READINESS, DOMAIN_TAGS, FREQUENCY, IMPACTS, OWNER_READINESS,
+  AFFECTED_PARTIES, DATA_READINESS, FREQUENCY, IMPACTS, OWNER_READINESS,
   PROBLEM_FREQUENCY, PROCESS_READINESS, PROPOSED_SOLUTION, URGENCY, USERS_RANGE, WORK_MODE, YES_NO_NA, YES_NO_UNKNOWN,
 } from "@/lib/enums";
 
@@ -8,6 +8,13 @@ const vals = (o: { value: string }[]) => o.map((x) => x.value) as [string, ...st
 const optStr = (max: number) => z.string().trim().max(max, `Maksimal ${max} karakter.`).optional().or(z.literal("")).transform((v) => (v ? v : null));
 const optEnum = (o: { value: string }[]) => z.enum(vals(o)).optional().or(z.literal("")).transform((v) => (v ? v : null));
 const arr = (o: { value: string }[]) => z.array(z.enum(vals(o))).default([]);
+/** Angka opsional; koma diterima sebagai pemisah desimal. */
+const optNum = z
+  .string()
+  .trim()
+  .optional()
+  .transform((v) => (v ? Number(v.replace(",", ".")) : null))
+  .refine((v) => v == null || Number.isFinite(v), "Isi dengan angka.");
 
 export const SHORT = 200;
 export const LONG = 4000;
@@ -50,8 +57,11 @@ export const needDraftSchema = z.object({
   sensitiveDataFlag: optEnum(YES_NO_UNKNOWN),
   sensitiveDataDetail: optStr(LONG),
   mobileFieldNeed: optEnum(YES_NO_UNKNOWN),
-  domainTags: arr(DOMAIN_TAGS),
-  expectedBenefits: arr(BENEFITS),
+  // Kaitan domain diisi reviewer (Form C); manfaat tidak lagi ditanyakan karena tumpang tindih dengan dampak.
+  metricName: optStr(SHORT),
+  metricUnit: optStr(64),
+  baselineValue: optNum,
+  targetValue: optNum,
   baseline: optStr(LONG),
   target: optStr(LONG),
   respondentUrgency: optEnum(URGENCY),
@@ -92,12 +102,13 @@ export function validateNeedForSubmit(v: NeedDraftInput): Record<string, string>
   if (v.existingSystemRelation === "yes" && !v.existingSystemDetail) errors.existingSystemDetail = "Jelaskan sistem yang terkait.";
   if (v.integrationRequired === "yes" && !v.integrationDetail) errors.integrationDetail = "Sebutkan Bagian / sistem yang bertukar data.";
   if (v.sensitiveDataFlag === "yes" && !v.sensitiveDataDetail) errors.sensitiveDataDetail = "Jelaskan jenis data sensitif (tanpa mengunggah datanya).";
+  if ((v.baselineValue != null || v.targetValue != null) && !v.metricName) errors.metricName = "Sebutkan apa yang diukur oleh angka tersebut.";
   return errors;
 }
 
 /** Mengubah FormData multi-value menjadi objek untuk schema. */
 export function needFormDataToObject(fd: FormData): Record<string, unknown> {
-  const multi = new Set(["affectedParties", "impacts", "proposedSolution", "domainTags", "expectedBenefits"]);
+  const multi = new Set(["affectedParties", "impacts", "proposedSolution"]);
   const out: Record<string, unknown> = {};
   for (const key of Object.keys(needDraftSchema.shape)) {
     if (multi.has(key)) out[key] = fd.getAll(key).map(String);

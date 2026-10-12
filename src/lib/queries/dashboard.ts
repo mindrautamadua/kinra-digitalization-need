@@ -62,7 +62,7 @@ export async function dashboardData(f: DashboardFilters, thresholds: ScoreThresh
       .orderBy(sql`count(*) desc`);
 
   const byImpact = await unnestCount(digitalNeeds.impacts);
-  const byBenefit = await unnestCount(digitalNeeds.expectedBenefits);
+  const byDomain = await unnestCount(digitalNeeds.domainTags);
 
   const byUrgency = await db
     .select({ key: sql<string>`coalesce(${digitalNeeds.respondentUrgency}, 'unset')`, n: count() })
@@ -127,7 +127,7 @@ export async function dashboardData(f: DashboardFilters, thresholds: ScoreThresh
     byStatus: byStatus as Row[],
     byDepartment: byDepartment as Row[],
     byImpact: byImpact as Row[],
-    byBenefit: byBenefit as Row[],
+    byDomain: byDomain as Row[],
     byUrgency: byUrgency as Row[],
     byPriority: byPriority as Row[],
     bySolution: bySolution as Row[],

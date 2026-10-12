@@ -58,7 +58,7 @@ export function NeedDetail({ need }: { need: DigitalNeed }) {
               { label: "Pertukaran data lintas Bagian / sistem", value: `${labelOf(YES_NO_UNKNOWN, need.integrationRequired)}${need.integrationDetail ? ` — ${need.integrationDetail}` : ""}` },
               { label: "Data sensitif / kritis", value: `${labelOf(YES_NO_UNKNOWN, need.sensitiveDataFlag)}${need.sensitiveDataDetail ? ` — ${need.sensitiveDataDetail}` : ""}` },
               { label: "Akses lapangan / mobile", value: labelOf(YES_NO_UNKNOWN, need.mobileFieldNeed) },
-              { label: "Domain KINRA", value: labelsOf(DOMAIN_TAGS, need.domainTags) },
+              { label: "Domain KINRA (diisi reviewer)", value: labelsOf(DOMAIN_TAGS, need.domainTags) },
             ]}
           />
         </CardBody>
@@ -68,10 +68,12 @@ export function NeedDetail({ need }: { need: DigitalNeed }) {
         <CardBody>
           <DescriptionList
             items={[
-              { label: "Manfaat yang diharapkan", value: labelsOf(BENEFITS, need.expectedBenefits) },
+              // Manfaat tidak lagi ditanyakan; tetap ditampilkan untuk data lama.
+              ...(need.expectedBenefits.length > 0 ? [{ label: "Manfaat yang diharapkan", value: labelsOf(BENEFITS, need.expectedBenefits) }] : []),
               { label: "Urgensi menurut Bagian", value: <UrgencyBadge value={need.respondentUrgency} /> },
-              { label: "Baseline", value: need.baseline },
-              { label: "Target", value: need.target },
+              { label: "Ukuran keberhasilan", value: formatMetric(need) },
+              { label: "Keterangan kondisi saat ini", value: need.baseline },
+              ...(need.target ? [{ label: "Target (isian lama)", value: need.target }] : []),
               { label: "Alasan urgensi", value: need.urgencyReason },
               { label: "Tenggat eksternal", value: need.externalDeadline },
               { label: "Kesiapan data", value: labelOf(DATA_READINESS, need.dataReadiness) },
@@ -86,4 +88,11 @@ export function NeedDetail({ need }: { need: DigitalNeed }) {
       </Card>
     </div>
   );
+}
+
+function formatMetric(n: { metricName: string | null; metricUnit: string | null; baselineValue: number | null; targetValue: number | null }) {
+  if (!n.metricName && n.baselineValue == null && n.targetValue == null) return null;
+  const num = (v: number | null) => (v == null ? "?" : v.toLocaleString("id-ID"));
+  const unit = n.metricUnit ? ` ${n.metricUnit}` : "";
+  return `${n.metricName ?? "Ukuran belum disebutkan"}: ${num(n.baselineValue)}${unit} saat ini → target ${num(n.targetValue)}${unit}`;
 }

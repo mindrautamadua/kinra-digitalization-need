@@ -7,7 +7,7 @@ import { PageHeader, Stat, Card, CardBody, CardHeader } from "@/components/ui/ca
 import { BarList } from "@/components/ui/bars";
 import { Select } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { BENEFITS, IMPACTS, NEED_STATUS_LABELS, SOLUTION_CATEGORY, URGENCY, labelOf } from "@/lib/enums";
+import { DOMAIN_TAGS, IMPACTS, NEED_STATUS_LABELS, SOLUTION_CATEGORY, URGENCY, labelOf } from "@/lib/enums";
 import { pct } from "@/lib/utils";
 import { formatDate } from "@/lib/utils";
 
@@ -125,7 +125,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
           </CardBody>
         </Card>
         <BarList title="Distribusi kategori dampak" rows={d.byImpact} labelOf={(k) => labelOf(IMPACTS, k)} />
-        <BarList title="Distribusi manfaat yang diharapkan" rows={d.byBenefit} labelOf={(k) => labelOf(BENEFITS, k)} />
+        <BarList title="Distribusi domain KINRA (klasifikasi reviewer)" rows={d.byDomain} labelOf={(k) => labelOf(DOMAIN_TAGS, k)} />
         <BarList title="Kebutuhan per kategori solusi awal" rows={d.bySolution} labelOf={(k) => (k === "unset" ? "Belum dikategorikan" : labelOf(SOLUTION_CATEGORY, k))} />
         {d.byPeriod.length > 1 && <BarList title="Tren respons menurut periode" rows={d.byPeriod} />}
       </div>

@@ -7,9 +7,9 @@ import { LinkButton } from "@/components/ui/button";
 import { INTERVIEW_STATUS_LABELS } from "@/lib/enums";
 import type { Interview } from "@/lib/db/schema";
 import type { FormState } from "@/actions/respond";
-import { toDatetimeLocal } from "@/lib/utils";
+import { toDatetimeLocal, needCodeLabel } from "@/lib/utils";
 
-type NeedOpt = { id: string; needCode: string; title: string; departmentName: string };
+type NeedOpt = { id: string; needCode: string | null; title: string; departmentName: string };
 type UserOpt = { id: string; fullName: string };
 
 export function InterviewForm({
@@ -39,14 +39,14 @@ export function InterviewForm({
               {fixedNeedId || i ? (
                 <>
                   <input type="hidden" name="needId" value={fixedNeedId ?? i?.needId} />
-                  <Input value={(() => { const n = needs.find((x) => x.id === (fixedNeedId ?? i?.needId)); return n ? `${n.needCode} · ${n.title} (${n.departmentName})` : ""; })()} disabled />
+                  <Input value={(() => { const n = needs.find((x) => x.id === (fixedNeedId ?? i?.needId)); return n ? `${needCodeLabel(n.needCode)} · ${n.title} (${n.departmentName})` : ""; })()} disabled />
                 </>
               ) : (
                 <Select id="needId" name="needId" required defaultValue="">
                   <option value="">— pilih kebutuhan —</option>
                   {needs.map((n) => (
                     <option key={n.id} value={n.id}>
-                      {n.needCode} · {n.title} ({n.departmentName})
+                      {needCodeLabel(n.needCode)} · {n.title} ({n.departmentName})
                     </option>
                   ))}
                 </Select>

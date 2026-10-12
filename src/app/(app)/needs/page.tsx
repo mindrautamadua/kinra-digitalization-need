@@ -9,7 +9,7 @@ import { StatusBadge, UrgencyBadge, Badge } from "@/components/ui/badge";
 import { RegisterFilterForm, filtersToQuery, parseFilters } from "@/components/needs/register-filters";
 import { labelOf, SOLUTION_CATEGORY, FOLLOW_UP } from "@/lib/enums";
 import { priorityCategory } from "@/lib/scoring";
-import { formatDate, truncate } from "@/lib/utils";
+import { formatDate, truncate, needCodeLabel } from "@/lib/utils";
 
 export const metadata = { title: "Register Kebutuhan" };
 
@@ -50,7 +50,7 @@ export default async function NeedsRegisterPage({ searchParams }: { searchParams
                   <tr key={r.id} className="hover:bg-slate-50">
                     <TD className="font-mono text-xs whitespace-nowrap">
                       <Link href={`/needs/${r.id}`} className="text-primary hover:underline">
-                        {r.needCode}
+                        {needCodeLabel(r.needCode)}
                       </Link>
                       {r.criticalFlag && (
                         <Badge tone="red" className="ml-1">

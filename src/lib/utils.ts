@@ -31,3 +31,8 @@ export function pct(part: number, total: number) {
   if (!total) return 0;
   return Math.round((part / total) * 1000) / 10;
 }
+
+/** Kode kebutuhan untuk tampilan; draft yang belum pernah dikirim belum memiliki kode. */
+export function needCodeLabel(code: string | null | undefined) {
+  return code ?? "Draft";
+}

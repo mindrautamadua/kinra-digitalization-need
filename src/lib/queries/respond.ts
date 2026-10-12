@@ -30,6 +30,17 @@ export async function needsForSubmission(submissionId: string) {
   });
 }
 
+/** Kebutuhan lain di Bagian yang sama yang terakhir diubah; sumber tombol "Salin dari kebutuhan sebelumnya". */
+export async function previousNeedFor(submissionId: string, excludeNeedId: string) {
+  return db.query.digitalNeeds.findFirst({
+    where: and(eq(digitalNeeds.submissionId, submissionId), ne(digitalNeeds.id, excludeNeedId), ne(digitalNeeds.status, "archived")),
+    orderBy: [desc(digitalNeeds.updatedAt)],
+    columns: { needCode: true, title: true, processOwner: true, dataReadiness: true, processReadiness: true, ownerReadiness: true, dependencies: true },
+  });
+}
+
+export type PreviousNeed = NonNullable<Awaited<ReturnType<typeof previousNeedFor>>>;
+
 /** Memuat kebutuhan beserta konteks dan memastikan pengguna berhak melihat. Null bila tidak berhak. */
 export async function loadNeedFor(user: SessionUser, needId: string) {
   const need = await db.query.digitalNeeds.findFirst({

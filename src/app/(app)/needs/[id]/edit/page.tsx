@@ -6,6 +6,7 @@ import { StatusBadge } from "@/components/ui/badge";
 import { NeedForm } from "@/components/needs/need-form";
 import { staffEditNeedAction } from "@/actions/review";
 import { FormMessage } from "@/components/ui/form";
+import { needCodeLabel } from "@/lib/utils";
 
 export const metadata = { title: "Koreksi Administratif" };
 
@@ -19,7 +20,7 @@ export default async function StaffEditNeedPage({ params }: { params: Promise<{ 
   return (
     <>
       <PageHeader
-        title={`Koreksi administratif · ${need.needCode}`}
+        title={`Koreksi administratif · ${needCodeLabel(need.needCode)}`}
         description={`${submission.department.name} · Perubahan oleh staf dicatat di audit trail beserta nilai sebelum/sesudah.`}
         actions={<StatusBadge status={need.status} />}
       />

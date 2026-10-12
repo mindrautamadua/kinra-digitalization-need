@@ -1,18 +1,20 @@
 "use client";
-import { useActionState, useMemo, useRef, useState } from "react";
+import { useActionState, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { saveNeedAction, type FormState } from "@/actions/respond";
 import { Card, CardBody } from "@/components/ui/card";
 import { CheckboxGroup, Field, Input, RadioGroup, Textarea } from "@/components/ui/input";
 import { FormMessage, SubmitButton } from "@/components/ui/form";
-import { Button, LinkButton } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import {
-  AFFECTED_PARTIES, BENEFITS, DATA_READINESS, DOMAIN_TAGS, FREQUENCY, IMPACTS, OWNER_READINESS, PROBLEM_FREQUENCY,
+  AFFECTED_PARTIES, DATA_READINESS, FREQUENCY, IMPACTS, OWNER_READINESS, PROBLEM_FREQUENCY,
   PROCESS_READINESS, PROPOSED_SOLUTION, URGENCY, YES_NO_NA, YES_NO_UNKNOWN,
 } from "@/lib/enums";
-import { NEED_REQUIRED } from "@/lib/validation/need";
+import { NEED_REQUIRED, needFormDataToObject, validateNeedForSubmit, type NeedDraftInput } from "@/lib/validation/need";
 import type { DigitalNeed } from "@/lib/db/schema";
+import type { PreviousNeed } from "@/lib/queries/respond";
 import { cn } from "@/lib/utils";
-import { Check } from "lucide-react";
+import { Check, Copy, Info } from "lucide-react";
 
 const STEPS = [
   { n: 1, title: "Identitas & konteks" },
@@ -21,13 +23,31 @@ const STEPS = [
   { n: 4, title: "Manfaat, urgensi & kesiapan" },
 ];
 
+const AUTOSAVE_MS = 30_000;
+
+/** Langkah tempat sebuah kolom berada, untuk navigasi dari pesan error. */
+function stepOf(key: string): number | undefined {
+  const r = NEED_REQUIRED.find((x) => x.key === key);
+  if (r) return r.step;
+  if (["frequency", "estimatedVolume", "affectedParties"].includes(key)) return 1;
+  if (["impacts", "evidenceAvailable", "problemFrequency"].includes(key)) return 2;
+  if (["existingSystemDetail", "integrationDetail", "sensitiveDataDetail", "dataRequired"].includes(key)) return 3;
+  if (["metricName", "metricUnit", "baselineValue", "targetValue", "baseline", "target", "externalDeadline", "dependencies", "estimatedCost", "additionalNotes"].includes(key)) return 4;
+  return undefined;
+}
+
+type SaveStatus = { tone: "idle" | "saving" | "saved" | "error"; text?: string };
+
 export function NeedForm({
   need,
+  previous,
   attachmentsSlot,
   staffAction,
   backHref,
 }: {
   need: DigitalNeed;
+  /** Kebutuhan lain di Bagian yang sama, untuk menyalin pemilik proses dan kesiapan. */
+  previous?: PreviousNeed;
   attachmentsSlot?: React.ReactNode;
   /** Bila diisi, form berjalan dalam mode koreksi administratif staf (tanpa tombol kirim). */
   staffAction?: (prev: FormState, fd: FormData) => Promise<FormState>;
@@ -37,7 +57,7 @@ export function NeedForm({
   const [state, action, pending] = useActionState(staffAction ?? saveNeedAction.bind(null, need.id), undefined);
   const [step, setStep] = useState(1);
   const formRef = useRef<HTMLFormElement>(null);
-  const draftBtnRef = useRef<HTMLButtonElement>(null);
+  const router = useRouter();
 
   // state untuk pertanyaan kondisional
   const [existingSys, setExistingSys] = useState(need.existingSystemRelation ?? "");
@@ -48,8 +68,6 @@ export function NeedForm({
   const [affected, setAffected] = useState<string[]>(need.affectedParties ?? []);
   const [impacts, setImpacts] = useState<string[]>(need.impacts ?? []);
   const [solutions, setSolutions] = useState<string[]>(need.proposedSolution ?? []);
-  const [domains, setDomains] = useState<string[]>(need.domainTags ?? []);
-  const [benefits, setBenefits] = useState<string[]>(need.expectedBenefits ?? []);
   const [frequency, setFrequency] = useState(need.frequency ?? "");
   const [problemFreq, setProblemFreq] = useState(need.problemFrequency ?? "");
   const [mobile, setMobile] = useState(need.mobileFieldNeed ?? "");
@@ -61,13 +79,107 @@ export function NeedForm({
   const errorSteps = useMemo(() => {
     const s = new Set<number>();
     for (const k of Object.keys(fe)) {
-      const r = NEED_REQUIRED.find((x) => x.key === k);
-      if (r) s.add(r.step);
-      else if (["impacts", "evidenceAvailable"].includes(k)) s.add(2);
-      else if (["existingSystemDetail", "integrationDetail", "sensitiveDataDetail"].includes(k)) s.add(3);
+      const n = stepOf(k);
+      if (n) s.add(n);
     }
     return s;
   }, [fe]);
+
+  // Kolom wajib yang masih kosong, dihitung ulang setiap isian berubah (untuk tanda centang per langkah).
+  const [missing, setMissing] = useState(() => validateNeedForSubmit({ ...need, impacts: need.impacts ?? [] } as NeedDraftInput));
+  const stepComplete = (n: number) => !Object.keys(missing).some((k) => stepOf(k) === n);
+
+  // Simpan otomatis: versionRef naik tiap perubahan; savedVersionRef = versi terakhir yang tersimpan.
+  const versionRef = useRef(0);
+  const savedVersionRef = useRef(0);
+  const savingRef = useRef<Promise<boolean> | null>(null);
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>({ tone: "idle" });
+  const draftAction = useMemo(() => saveNeedAction.bind(null, need.id), [need.id]);
+  const isDirty = () => versionRef.current !== savedVersionRef.current;
+
+  function handleChange() {
+    versionRef.current += 1;
+    if (formRef.current) setMissing(validateNeedForSubmit(needFormDataToObject(new FormData(formRef.current)) as NeedDraftInput));
+  }
+
+  /** Menyimpan draft langsung lewat server action (bukan submit form) agar isian yang sedang diketik tidak ter-reset. */
+  const saveDraft = useCallback(async (): Promise<boolean> => {
+    if (staffMode || !formRef.current) return true;
+    if (savingRef.current) await savingRef.current;
+    if (versionRef.current === savedVersionRef.current) return true;
+    const version = versionRef.current;
+    const fd = new FormData(formRef.current);
+    fd.set("intent", "draft");
+    setSaveStatus({ tone: "saving" });
+    const run = draftAction(undefined, fd)
+      .then((res) => {
+        if (res?.error) {
+          setSaveStatus({ tone: "error", text: res.error });
+          return false;
+        }
+        savedVersionRef.current = version;
+        setSaveStatus({ tone: "saved", text: new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }) });
+        return true;
+      })
+      .catch(() => {
+        setSaveStatus({ tone: "error", text: "Koneksi bermasalah." });
+        return false;
+      })
+      .finally(() => {
+        savingRef.current = null;
+      });
+    savingRef.current = run;
+    return run;
+  }, [staffMode, draftAction]);
+
+  useEffect(() => {
+    if (staffMode) return;
+    const t = window.setInterval(() => void saveDraft(), AUTOSAVE_MS);
+    return () => window.clearInterval(t);
+  }, [staffMode, saveDraft]);
+
+  useEffect(() => {
+    function warn(e: BeforeUnloadEvent) {
+      if (versionRef.current !== savedVersionRef.current) e.preventDefault();
+    }
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, []);
+
+  async function close() {
+    const href = backHref ?? `/respond/needs/${need.id}`;
+    if (staffMode) {
+      if (isDirty() && !window.confirm("Koreksi belum disimpan. Keluar tanpa menyimpan?")) return;
+    } else if (!(await saveDraft()) && !window.confirm("Draft gagal disimpan. Keluar dan buang perubahan terakhir?")) {
+      return;
+    }
+    router.push(href);
+  }
+
+  /** Menyalin isian yang biasanya sama dalam satu Bagian; kolom teks yang sudah diisi tidak ditimpa. */
+  function copyFromPrevious() {
+    if (!previous || !formRef.current) return;
+    const setIfEmpty = (name: string, value: string | null) => {
+      const el = formRef.current?.elements.namedItem(name);
+      if (value && (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) && !el.value.trim()) el.value = value;
+    };
+    setIfEmpty("processOwner", previous.processOwner);
+    setIfEmpty("dependencies", previous.dependencies);
+    if (previous.dataReadiness) setDataReady(previous.dataReadiness);
+    if (previous.processReadiness) setProcReady(previous.processReadiness);
+    if (previous.ownerReadiness) setOwnerReady(previous.ownerReadiness);
+    handleChange();
+  }
+
+  function jumpTo(key: string) {
+    const n = stepOf(key);
+    if (n) setStep(n);
+    window.setTimeout(() => {
+      const el = document.getElementById(key) ?? formRef.current?.querySelector<HTMLElement>(`[name="${key}"]`);
+      el?.scrollIntoView({ behavior: "smooth", block: "center" });
+      el?.focus({ preventScroll: true });
+    }, 50);
+  }
 
   // Lompat ke langkah pertama yang bererror saat hasil aksi baru tiba (pola "adjust state during render").
   const [seenState, setSeenState] = useState(state);
@@ -76,12 +188,8 @@ export function NeedForm({
     if (errorSteps.size > 0) setStep(Math.min(...errorSteps));
   }
 
-  function saveDraftSilently() {
-    if (staffMode) return; // koreksi staf disimpan eksplisit dengan alasan
-    if (formRef.current && draftBtnRef.current) formRef.current.requestSubmit(draftBtnRef.current);
-  }
   function go(n: number) {
-    saveDraftSilently();
+    void saveDraft(); // koreksi staf tidak disimpan otomatis; disimpan eksplisit dengan alasan
     setStep(n);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -89,12 +197,37 @@ export function NeedForm({
   const requiredOnStep = (n: number) => NEED_REQUIRED.filter((r) => r.step === n).length;
 
   return (
-    <form ref={formRef} action={action} className="space-y-6">
+    <form
+      ref={formRef}
+      action={action}
+      onChange={handleChange}
+      onSubmit={() => {
+        savedVersionRef.current = versionRef.current;
+      }}
+      className="space-y-6"
+    >
+      {!staffMode && (
+        <div className="flex gap-3 rounded-md border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
+          <Info className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+          <div className="space-y-1">
+            <p>
+              <span className="font-medium">Perkiraan waktu ±15 menit</span> untuk kolom wajib (ditandai *). Kolom lain membantu penilaian, tetapi boleh
+              dikosongkan bila belum diketahui. Tim Assessment dapat menanyakannya saat klarifikasi atau wawancara. Draft tersimpan otomatis setiap 30 detik.
+            </p>
+            <p>
+              <span className="font-medium">Setelah dikirim:</span> Tim Assessment TI menelaah kebutuhan ini, lalu dapat meminta klarifikasi, menjadwalkan
+              wawancara, atau menetapkan prioritas. Anda akan menerima notifikasi untuk setiap tindak lanjut, dan statusnya dapat dipantau di halaman kebutuhan ini.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Progress indicator */}
       <ol className="grid grid-cols-2 gap-2 sm:grid-cols-4" aria-label="Langkah pengisian">
         {STEPS.map((s) => {
           const active = s.n === step;
           const hasErr = errorSteps.has(s.n);
+          const done = !hasErr && stepComplete(s.n);
           return (
             <li key={s.n}>
               <button
@@ -107,7 +240,10 @@ export function NeedForm({
                 )}
                 aria-current={active ? "step" : undefined}
               >
-                <span className="block font-semibold">Langkah {s.n}</span>
+                <span className="flex items-center gap-1 font-semibold">
+                  Langkah {s.n}
+                  {done && <Check className="h-4 w-4 text-success" aria-label="kolom wajib lengkap" />}
+                </span>
                 <span className="block text-muted">{s.title}</span>
               </button>
             </li>
@@ -115,14 +251,24 @@ export function NeedForm({
         })}
       </ol>
 
-      {state?.error && (
-        <FormMessage
-          message={
-            Object.keys(fe).length > 0
-              ? `${state.error} ${Object.values(fe).join(" ")}`
-              : state.error
-          }
-        />
+      {state?.error && <FormMessage message={state.error} />}
+      {Object.keys(fe).length > 0 && (
+        <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+          <p className="mb-1">Klik untuk menuju kolom yang perlu diperbaiki:</p>
+          <ul className="space-y-0.5">
+            {Object.entries(fe).map(([k, m]) => {
+              const n = stepOf(k);
+              return (
+                <li key={k}>
+                  <button type="button" onClick={() => jumpTo(k)} className="text-left underline underline-offset-2 hover:no-underline">
+                    {n ? `Langkah ${n} · ` : ""}
+                    {m}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
       )}
       {state?.success && !state.error && <FormMessage message={state.success} tone="success" />}
 
@@ -130,15 +276,15 @@ export function NeedForm({
         <CardBody className="space-y-5">
           {/* ---------------- Langkah 1 ---------------- */}
           <div className={step === 1 ? "space-y-5" : "hidden"}>
-            <StepTitle n={1} title="Identitas dan konteks" required={requiredOnStep(1)} />
+            <StepTitle n={1} title="Identitas dan konteks" required={requiredOnStep(1)} autosave={!staffMode} />
             <Field label="Judul kebutuhan" htmlFor="title" required hint="Ringkas, maks. 200 karakter. Contoh: “Penagihan utilitas tenant masih manual”." error={fe.title}>
               <Input id="title" name="title" defaultValue={need.title} maxLength={200} />
             </Field>
-            <Field label="Proses bisnis terkait" htmlFor="businessProcess" required hint="Proses apa yang terdampak? Contoh: meter-to-cash utilitas, penanganan pengaduan tenant." error={fe.businessProcess}>
+            <Field label="Proses bisnis terkait" htmlFor="businessProcess" required hint="Proses apa yang terdampak? Contoh: pembacaan meter sampai penagihan utilitas, penanganan pengaduan tenant." error={fe.businessProcess}>
               <Textarea id="businessProcess" name="businessProcess" defaultValue={need.businessProcess ?? ""} maxLength={4000} />
             </Field>
             <div className="grid gap-5 sm:grid-cols-2">
-              <Field label="Pemilik proses" htmlFor="processOwner" required hint="Jabatan / nama pejabat yang bertanggung jawab atas proses." error={fe.processOwner}>
+              <Field label="Pemilik proses" htmlFor="processOwner" required hint="Jabatan / nama pejabat yang bertanggung jawab atas proses. Terisi awal dari Profil Bagian; ubah bila berbeda." error={fe.processOwner}>
                 <Input id="processOwner" name="processOwner" defaultValue={need.processOwner ?? ""} maxLength={200} />
               </Field>
               <Field label="Perkiraan volume" htmlFor="estimatedVolume" hint="Angka atau rentang; kosongkan bila belum diketahui. Contoh: ±300 tagihan/bulan." error={fe.estimatedVolume}>
@@ -155,7 +301,7 @@ export function NeedForm({
 
           {/* ---------------- Langkah 2 ---------------- */}
           <div className={step === 2 ? "space-y-5" : "hidden"}>
-            <StepTitle n={2} title="Masalah saat ini" required={requiredOnStep(2) + 1} />
+            <StepTitle n={2} title="Masalah saat ini" required={requiredOnStep(2) + 1} autosave={!staffMode} />
             <Field label="Apa masalah yang terjadi?" htmlFor="problemDescription" required hint="Jelaskan masalahnya, bukan solusinya. Apa yang sulit, lambat, salah, atau tidak tersedia?" error={fe.problemDescription}>
               <Textarea id="problemDescription" name="problemDescription" defaultValue={need.problemDescription ?? ""} maxLength={4000} className="min-h-[140px]" />
             </Field>
@@ -168,7 +314,13 @@ export function NeedForm({
             <Field label="Seberapa sering masalah terjadi?">
               <RadioGroup name="problemFrequency" options={PROBLEM_FREQUENCY} value={problemFreq} onChange={setProblemFreq} inline />
             </Field>
-            <Field label="Apa dampaknya jika masalah tidak ditangani?" htmlFor="consequenceIfUnresolved" required error={fe.consequenceIfUnresolved}>
+            <Field
+              label="Apa dampaknya jika masalah tidak ditangani?"
+              htmlFor="consequenceIfUnresolved"
+              required
+              hint="Sebutkan akibat yang nyata, dengan angka bila ada. Contoh: “Tunggakan tenant naik ±Rp200 juta/bulan karena tagihan terlambat terbit, dan menjadi temuan audit dua tahun berturut-turut.” Hindari jawaban umum seperti “pekerjaan lambat”."
+              error={fe.consequenceIfUnresolved}
+            >
               <Textarea id="consequenceIfUnresolved" name="consequenceIfUnresolved" defaultValue={need.consequenceIfUnresolved ?? ""} maxLength={4000} />
             </Field>
             <Field label="Apakah ada contoh atau bukti pendukung?" hint="Bukti dapat diunggah pada bagian Lampiran di bawah. Samarkan data pribadi / rahasia yang tidak diperlukan." error={fe.evidenceAvailable}>
@@ -179,8 +331,8 @@ export function NeedForm({
 
           {/* ---------------- Langkah 3 ---------------- */}
           <div className={step === 3 ? "space-y-5" : "hidden"}>
-            <StepTitle n={3} title="Kebutuhan dan solusi" required={requiredOnStep(3)} />
-            <Field label="Perubahan atau hasil apa yang ingin dicapai?" htmlFor="desiredOutcome" required hint="Fokus pada hasil (outcome), misalnya “tagihan terbit H+1 setelah pembacaan meter”." error={fe.desiredOutcome}>
+            <StepTitle n={3} title="Kebutuhan dan solusi" required={requiredOnStep(3)} autosave={!staffMode} />
+            <Field label="Perubahan atau hasil apa yang ingin dicapai?" htmlFor="desiredOutcome" required hint="Tulis hasil yang ingin dicapai, bukan fitur aplikasinya. Contoh: “tagihan terbit H+1 setelah pembacaan meter”." error={fe.desiredOutcome}>
               <Textarea id="desiredOutcome" name="desiredOutcome" defaultValue={need.desiredOutcome ?? ""} maxLength={4000} className="min-h-[120px]" />
             </Field>
             <Field label="Usulan solusi (opsional)" hint="Boleh memilih “Belum tahu”. Solusi akhir ditentukan setelah validasi.">
@@ -221,34 +373,62 @@ export function NeedForm({
             <Field label="Apakah proses memerlukan akses dari lapangan / perangkat mobile?">
               <RadioGroup name="mobileFieldNeed" options={YES_NO_UNKNOWN} value={mobile} onChange={setMobile} inline />
             </Field>
-            <Field label="Kaitan dengan domain KINRA" hint="Tenant, investor, utilitas, kawasan, aset, infrastruktur, dan lainnya. Pilih semua yang relevan.">
-              <CheckboxGroup name="domainTags" options={DOMAIN_TAGS} value={domains} onChange={setDomains} />
-            </Field>
           </div>
 
           {/* ---------------- Langkah 4 ---------------- */}
           <div className={step === 4 ? "space-y-5" : "hidden"}>
-            <StepTitle n={4} title="Manfaat, urgensi, dan kesiapan" required={requiredOnStep(4)} />
-            <Field label="Manfaat yang diharapkan" hint="Pilih semua yang relevan.">
-              <CheckboxGroup name="expectedBenefits" options={BENEFITS} value={benefits} onChange={setBenefits} />
-            </Field>
-            <div className="grid gap-5 sm:grid-cols-2">
-              <Field label="Baseline / kondisi saat ini" htmlFor="baseline" hint="Angka jika diketahui: waktu proses, jumlah kesalahan, tunggakan, laporan manual." error={fe.baseline}>
-                <Textarea id="baseline" name="baseline" defaultValue={need.baseline ?? ""} maxLength={4000} />
+            <StepTitle n={4} title="Manfaat, urgensi, dan kesiapan" required={requiredOnStep(4)} autosave={!staffMode} />
+            <fieldset className="space-y-3 rounded-md border border-border p-4">
+              <legend className="px-1 text-sm font-medium">Ukuran keberhasilan (opsional)</legend>
+              <p className="text-xs text-muted">
+                Satu angka yang paling menggambarkan masalahnya, bila diketahui. Contoh: waktu penerbitan tagihan, 5 → 1 hari kerja. Boleh dikosongkan;
+                Tim Assessment dapat membantu menentukannya saat wawancara.
+              </p>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field label="Apa yang diukur" htmlFor="metricName" hint="Contoh: waktu penerbitan tagihan." error={fe.metricName}>
+                  <Input id="metricName" name="metricName" defaultValue={need.metricName ?? ""} maxLength={200} />
+                </Field>
+                <Field label="Satuan" htmlFor="metricUnit" hint="Contoh: hari kerja, kesalahan/bulan, Rp juta." error={fe.metricUnit}>
+                  <Input id="metricUnit" name="metricUnit" defaultValue={need.metricUnit ?? ""} maxLength={64} />
+                </Field>
+                <Field label="Angka saat ini" htmlFor="baselineValue" error={fe.baselineValue}>
+                  <Input id="baselineValue" name="baselineValue" type="number" step="any" inputMode="decimal" defaultValue={need.baselineValue ?? ""} />
+                </Field>
+                <Field label="Angka target" htmlFor="targetValue" error={fe.targetValue}>
+                  <Input id="targetValue" name="targetValue" type="number" step="any" inputMode="decimal" defaultValue={need.targetValue ?? ""} />
+                </Field>
+              </div>
+              <Field label="Keterangan (opsional)" htmlFor="baseline" hint="Konteks angka di atas, atau kondisi saat ini bila belum ada angkanya." error={fe.baseline}>
+                <Textarea id="baseline" name="baseline" defaultValue={need.baseline ?? ""} maxLength={4000} className="min-h-[72px]" />
               </Field>
-              <Field label="Target yang diharapkan" htmlFor="target" hint="Angka jika diketahui; opsional." error={fe.target}>
-                <Textarea id="target" name="target" defaultValue={need.target ?? ""} maxLength={4000} />
-              </Field>
-            </div>
-            <Field label="Urgensi menurut Bagian" required error={fe.respondentUrgency}>
-              <RadioGroup name="respondentUrgency" options={URGENCY} value={urgency} onChange={setUrgency} inline />
+              {/* Isian target teks dari versi formulir lama dipertahankan apa adanya. */}
+              <input type="hidden" name="target" value={need.target ?? ""} />
+            </fieldset>
+            <Field label="Urgensi menurut Bagian" required hint="Pilih sesuai definisi agar kebutuhan dapat dibandingkan secara adil antar-Bagian." error={fe.respondentUrgency}>
+              <RadioGroup name="respondentUrgency" options={URGENCY} value={urgency} onChange={setUrgency} />
             </Field>
-            <Field label="Alasan urgensi" htmlFor="urgencyReason" required error={fe.urgencyReason}>
+            <Field
+              label="Alasan urgensi"
+              htmlFor="urgencyReason"
+              required
+              hint="Jelaskan mengapa tingkat urgensi itu yang dipilih. Contoh: “Regulator mewajibkan laporan elektronik mulai Maret 2027, sedangkan saat ini laporan disusun manual selama 5 hari kerja.”"
+              error={fe.urgencyReason}
+            >
               <Textarea id="urgencyReason" name="urgencyReason" defaultValue={need.urgencyReason ?? ""} maxLength={4000} />
             </Field>
             <Field label="Tenggat eksternal atau ketergantungan waktu" htmlFor="externalDeadline" hint="Opsional. Contoh: kewajiban pelaporan regulator Maret 2027." error={fe.externalDeadline}>
               <Input id="externalDeadline" name="externalDeadline" defaultValue={need.externalDeadline ?? ""} maxLength={200} />
             </Field>
+            {previous && !staffMode && (
+              <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border bg-slate-50 px-3 py-2 text-sm">
+                <span className="text-muted">
+                  Kesiapan biasanya sama untuk kebutuhan dalam satu Bagian. Sumber: {previous.needCode ?? "draft"} · {previous.title || "tanpa judul"}
+                </span>
+                <Button type="button" variant="outline" size="sm" onClick={copyFromPrevious}>
+                  <Copy className="h-4 w-4" /> Salin dari kebutuhan sebelumnya
+                </Button>
+              </div>
+            )}
             <div className="grid gap-5 lg:grid-cols-3">
               <Field label="Kesiapan data">
                 <RadioGroup name="dataReadiness" options={DATA_READINESS} value={dataReady} onChange={setDataReady} />
@@ -292,7 +472,7 @@ export function NeedForm({
       {/* Navigasi */}
       <div className="sticky bottom-0 -mx-4 border-t border-border bg-surface/95 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-2">
-          <div className="flex gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Button type="button" variant="outline" onClick={() => go(Math.max(1, step - 1))} disabled={step === 1}>
               Sebelumnya
             </Button>
@@ -301,20 +481,26 @@ export function NeedForm({
                 Lanjut
               </Button>
             )}
+            {!staffMode && saveStatus.tone !== "idle" && (
+              <span role="status" className={cn("text-xs", saveStatus.tone === "error" ? "text-danger" : "text-muted")}>
+                {saveStatus.tone === "saving"
+                  ? "Menyimpan draft…"
+                  : saveStatus.tone === "saved"
+                    ? `Draft tersimpan otomatis ${saveStatus.text}`
+                    : `Gagal menyimpan draft. ${saveStatus.text}`}
+              </span>
+            )}
           </div>
           <div className="flex flex-wrap gap-2">
-            <LinkButton href={backHref ?? `/respond/needs/${need.id}`} variant="ghost">
+            <Button type="button" variant="ghost" onClick={() => void close()}>
               Tutup
-            </LinkButton>
+            </Button>
             {staffMode ? (
               <SubmitButton name="intent" value="draft" pendingText="Menyimpan…" disabled={pending}>
                 <Check className="h-4 w-4" /> Simpan koreksi
               </SubmitButton>
             ) : (
               <>
-                <button ref={draftBtnRef} type="submit" name="intent" value="draft" className="sr-only" tabIndex={-1} aria-hidden>
-                  simpan draft
-                </button>
                 <SubmitButton variant="outline" name="intent" value="draft" pendingText="Menyimpan…">
                   Simpan Draft
                 </SubmitButton>
@@ -330,14 +516,15 @@ export function NeedForm({
   );
 }
 
-function StepTitle({ n, title, required }: { n: number; title: string; required: number }) {
+function StepTitle({ n, title, required, autosave }: { n: number; title: string; required: number; autosave: boolean }) {
   return (
     <div className="border-b border-border pb-3">
       <h2 className="text-lg font-semibold">
         Langkah {n} · {title}
       </h2>
       <p className="text-xs text-muted">
-        {required > 0 ? `${required} kolom wajib pada langkah ini (ditandai *).` : "Tidak ada kolom wajib pada langkah ini."} Draft tersimpan otomatis saat berpindah langkah.
+        {required > 0 ? `${required} kolom wajib pada langkah ini (ditandai *).` : "Tidak ada kolom wajib pada langkah ini."}
+        {autosave && " Draft tersimpan otomatis setiap 30 detik dan saat berpindah langkah."}
       </p>
     </div>
   );

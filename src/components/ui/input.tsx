@@ -112,7 +112,7 @@ export function RadioGroup({
   inline,
 }: {
   name: string;
-  options: { value: string; label: string }[];
+  options: { value: string; label: string; hint?: string }[];
   value: string | null | undefined;
   onChange?: (v: string) => void;
   inline?: boolean;
@@ -123,7 +123,8 @@ export function RadioGroup({
         <label
           key={o.value}
           className={cn(
-            "flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-sm",
+            "flex cursor-pointer gap-2 rounded-md border px-3 py-2 text-sm",
+            o.hint ? "items-start" : "items-center",
             value === o.value ? "border-primary bg-accent" : "border-border bg-surface hover:bg-slate-50",
           )}
         >
@@ -133,9 +134,16 @@ export function RadioGroup({
             value={o.value}
             checked={value === o.value}
             onChange={() => onChange?.(o.value)}
-            className="h-4 w-4 accent-[var(--primary)]"
+            className={cn("h-4 w-4 shrink-0 accent-[var(--primary)]", o.hint && "mt-0.5")}
           />
-          {o.label}
+          {o.hint ? (
+            <span>
+              <span className="block">{o.label}</span>
+              <span className="block text-xs text-muted">{o.hint}</span>
+            </span>
+          ) : (
+            o.label
+          )}
         </label>
       ))}
     </div>
