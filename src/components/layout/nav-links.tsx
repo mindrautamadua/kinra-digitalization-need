@@ -18,7 +18,7 @@ const icons = {
 
 export type NavItem = { href: string; label: string; icon: keyof typeof icons };
 
-export function NavLinks({ items, compact }: { items: NavItem[]; compact?: boolean }) {
+export function NavLinks({ items, compact, collapsed }: { items: NavItem[]; compact?: boolean; collapsed?: boolean }) {
   const pathname = usePathname();
   return (
     <ul className={cn(compact ? "flex gap-1" : "space-y-1")}>
@@ -33,11 +33,13 @@ export function NavLinks({ items, compact }: { items: NavItem[]; compact?: boole
                 "flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium whitespace-nowrap",
                 active ? "bg-accent text-primary" : "text-slate-700 hover:bg-slate-100",
                 compact && "px-2.5 py-1.5 text-xs",
+                collapsed && "justify-center px-0",
               )}
               aria-current={active ? "page" : undefined}
+              title={collapsed ? it.label : undefined}
             >
               <Icon className={cn("shrink-0", compact ? "h-3.5 w-3.5" : "h-4 w-4")} aria-hidden />
-              {it.label}
+              <span className={cn(collapsed && "sr-only")}>{it.label}</span>
             </Link>
           </li>
         );

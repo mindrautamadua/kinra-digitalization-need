@@ -1,10 +1,13 @@
 import Link from "next/link";
+import { cookies } from "next/headers";
 import { and, count, eq, isNull } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { notifications } from "@/lib/db/schema";
 import type { SessionUser } from "@/lib/auth/session";
 import { ROLE_LABELS } from "@/lib/enums";
 import { NavLinks, type NavItem } from "./nav-links";
+import { Sidebar } from "./sidebar";
+import { SIDEBAR_COOKIE } from "./sidebar-cookie";
 import { logoutAction } from "@/actions/auth";
 import { Bell, LogOut } from "lucide-react";
 
@@ -43,25 +46,15 @@ export async function AppShell({ user, children }: { user: SessionUser; children
     .from(notifications)
     .where(and(eq(notifications.userId, user.id), isNull(notifications.readAt)));
   const nav = navFor(user);
+  const cookieStore = await cookies();
 
   return (
     <div className="flex min-h-screen">
-      <aside className="no-print hidden w-64 shrink-0 flex-col border-r border-border bg-surface md:flex">
-        <div className="border-b border-border px-5 py-4">
-          <Link href="/" className="block">
-            <p className="text-xs font-semibold uppercase tracking-wider text-primary">KINRA</p>
-            <p className="text-sm font-semibold leading-tight">Digitalization Needs Assessment</p>
-          </Link>
-        </div>
-        <nav className="flex-1 overflow-y-auto px-3 py-4">
-          <NavLinks items={nav} />
-        </nav>
-        <div className="border-t border-border px-5 py-4 text-xs text-muted">
-          <p className="font-medium text-foreground">{user.fullName}</p>
-          <p>{ROLE_LABELS[user.role]}</p>
-          {user.departmentName && <p className="truncate">{user.departmentName}</p>}
-        </div>
-      </aside>
+      <Sidebar
+        items={nav}
+        user={{ fullName: user.fullName, roleLabel: ROLE_LABELS[user.role], departmentName: user.departmentName }}
+        defaultCollapsed={cookieStore.get(SIDEBAR_COOKIE)?.value === "collapsed"}
+      />
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="no-print sticky top-0 z-10 flex h-14 items-center justify-between gap-3 border-b border-border bg-surface/90 px-4 backdrop-blur sm:px-6">
           <div className="md:hidden">
