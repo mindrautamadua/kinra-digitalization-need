@@ -5,6 +5,7 @@ import { listDepartments, listPeriods } from "@/lib/queries/master";
 import { getSetting } from "@/lib/settings";
 import { PageHeader, Stat, Card, CardBody, CardHeader } from "@/components/ui/card";
 import { BarList } from "@/components/ui/bars";
+import { DepartmentUrgencyChart } from "@/components/dashboard/department-urgency-chart";
 import { Select } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { DOMAIN_TAGS, IMPACTS, NEED_STATUS_LABELS, SOLUTION_CATEGORY, URGENCY, labelOf } from "@/lib/enums";
@@ -73,6 +74,18 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         <Stat label="Risiko kritis" value={<Link href={q({ critical: "1" })} className="hover:underline">{d.critical}</Link>} tone={d.critical > 0 ? "danger" : "default"} />
       </div>
 
+      <DepartmentUrgencyChart
+        className="mt-6"
+        rows={d.byDepartmentUrgency}
+        hrefFor={(dept, urgency) => {
+          const p = new URLSearchParams();
+          if (periodId) p.set("period", periodId);
+          p.set("department", dept);
+          if (urgency) p.set("urgency", urgency);
+          return `/needs?${p.toString()}`;
+        }}
+      />
+
       <div className="mt-6 grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
         <Card>
           <CardHeader title="Kebutuhan menurut status" />
@@ -94,7 +107,6 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
             </ul>
           </CardBody>
         </Card>
-        <BarList title="Kebutuhan per Bagian" rows={d.byDepartment} max={15} />
         <Card>
           <CardHeader title="Urgensi responden vs prioritas reviewer" description="Urgensi dilaporkan Bagian dibandingkan hasil skor setelah validasi." />
           <CardBody className="grid grid-cols-2 gap-4 text-sm">

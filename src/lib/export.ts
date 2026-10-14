@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { departments, assessmentPeriods, interviews, digitalNeeds, departmentSubmissions } from "@/lib/db/schema";
 import { queryRegisterAll, type RegisterFilters, type RegisterRow } from "@/lib/queries/needs";
 import { FOLLOW_UP, IMPACTS, INTERVIEW_STATUS_LABELS, NEED_STATUS_LABELS, SCORE_CRITERIA, SOLUTION_CATEGORY, URGENCY, labelOf, labelsOf } from "@/lib/enums";
+import { hasActiveNeeds } from "@/lib/queries/dashboard";
 import { priorityCategory, type ScoreThresholds, type ScoreWeights } from "@/lib/scoring";
 
 export const REGISTER_COLUMNS: { header: string; key: string; width?: number; get: (r: RegisterRow, origin: string) => unknown }[] = [
@@ -172,7 +173,7 @@ export async function buildWorkbook(f: RegisterFilters, thresholds: ScoreThresho
   md.addRow(["Nama", "Mulai", "Tenggat", "Status", "Bagian ditetapkan", "Bagian mengisi"]);
   const periods = await db.select().from(assessmentPeriods).orderBy(assessmentPeriods.startAt);
   for (const p of periods) {
-    const subs = await db.select({ id: departmentSubmissions.id }).from(departmentSubmissions).where(and(eq(departmentSubmissions.periodId, p.id), ne(departmentSubmissions.status, "draft")));
+    const subs = await db.select({ id: departmentSubmissions.id }).from(departmentSubmissions).where(and(eq(departmentSubmissions.periodId, p.id), ne(departmentSubmissions.status, "draft"), hasActiveNeeds));
     const assigned = await db.query.periodDepartments.findMany({ where: (t, { eq }) => eq(t.periodId, p.id), columns: { id: true } });
     md.addRow([p.name, p.startAt, p.dueAt, p.status, assigned.length, subs.length]);
   }

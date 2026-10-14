@@ -9,6 +9,11 @@ export type DashboardFilters = { periodId?: string; departmentId?: string | null
 
 type Row = { key: string; n: number };
 
+export type DepartmentUrgencyRow = { id: string; name: string; total: number; byUrgency: Record<string, number> };
+
+/** Bagian dihitung sudah mengisi bila punya minimal satu kebutuhan terkirim yang tidak diarsipkan. */
+export const hasActiveNeeds = sql`exists (select 1 from ${digitalNeeds} where ${digitalNeeds.submissionId} = ${departmentSubmissions.id} and ${digitalNeeds.status} not in ('draft','archived'))`;
+
 export async function dashboardData(f: DashboardFilters, thresholds: ScoreThresholds) {
   const periodCond = f.periodId ? eq(departmentSubmissions.periodId, f.periodId) : undefined;
   const deptCond = f.departmentId ? eq(departmentSubmissions.departmentId, f.departmentId) : undefined;
@@ -23,7 +28,7 @@ export async function dashboardData(f: DashboardFilters, thresholds: ScoreThresh
     const [{ n: r }] = await db
       .select({ n: count() })
       .from(departmentSubmissions)
-      .where(and(eq(departmentSubmissions.periodId, f.periodId), ne(departmentSubmissions.status, "draft"), deptCond));
+      .where(and(eq(departmentSubmissions.periodId, f.periodId), ne(departmentSubmissions.status, "draft"), hasActiveNeeds, deptCond));
     responded = r;
   } else {
     const [{ n }] = await db.select({ n: sql<number>`count(distinct ${periodDepartments.departmentId})` }).from(periodDepartments).where(f.departmentId ? eq(periodDepartments.departmentId, f.departmentId) : undefined);
@@ -31,7 +36,7 @@ export async function dashboardData(f: DashboardFilters, thresholds: ScoreThresh
     const [{ n: r }] = await db
       .select({ n: sql<number>`count(distinct ${departmentSubmissions.departmentId})` })
       .from(departmentSubmissions)
-      .where(and(ne(departmentSubmissions.status, "draft"), deptCond));
+      .where(and(ne(departmentSubmissions.status, "draft"), hasActiveNeeds, deptCond));
     responded = Number(r);
   }
 
@@ -42,14 +47,28 @@ export async function dashboardData(f: DashboardFilters, thresholds: ScoreThresh
     .where(base)
     .groupBy(digitalNeeds.status);
 
-  const byDepartment = await db
-    .select({ key: departments.name, n: count() })
+  // Semua Bagian yang ditetapkan (termasuk yang belum mengirim) beserta jumlah kebutuhan per urgensi.
+  const assignedDepts = await db
+    .selectDistinct({ id: departments.id, name: departments.name })
+    .from(periodDepartments)
+    .innerJoin(departments, eq(departments.id, periodDepartments.departmentId))
+    .where(and(f.periodId ? eq(periodDepartments.periodId, f.periodId) : undefined, f.departmentId ? eq(periodDepartments.departmentId, f.departmentId) : undefined));
+  const deptUrgency = await db
+    .select({ id: departments.id, name: departments.name, urgency: sql<string>`coalesce(${digitalNeeds.respondentUrgency}, 'unset')`, n: count() })
     .from(digitalNeeds)
     .innerJoin(departmentSubmissions, eq(departmentSubmissions.id, digitalNeeds.submissionId))
     .innerJoin(departments, eq(departments.id, departmentSubmissions.departmentId))
     .where(base)
-    .groupBy(departments.name)
-    .orderBy(sql`count(*) desc`);
+    .groupBy(departments.id, departments.name, digitalNeeds.respondentUrgency);
+  const deptMap = new Map<string, DepartmentUrgencyRow>(assignedDepts.map((d) => [d.id, { id: d.id, name: d.name, total: 0, byUrgency: {} }]));
+  for (const r of deptUrgency) {
+    // Bagian yang punya kebutuhan tetapi tidak lagi ditetapkan di periode tetap ditampilkan.
+    if (!deptMap.has(r.id)) deptMap.set(r.id, { id: r.id, name: r.name, total: 0, byUrgency: {} });
+    const row = deptMap.get(r.id)!;
+    row.byUrgency[r.urgency] = (row.byUrgency[r.urgency] ?? 0) + Number(r.n);
+    row.total += Number(r.n);
+  }
+  const byDepartmentUrgency = [...deptMap.values()].sort((a, b) => b.total - a.total || a.name.localeCompare(b.name, "id"));
 
   const unnestCount = async (col: AnyPgColumn) =>
     db
@@ -125,7 +144,7 @@ export async function dashboardData(f: DashboardFilters, thresholds: ScoreThresh
     needInterview,
     critical,
     byStatus: byStatus as Row[],
-    byDepartment: byDepartment as Row[],
+    byDepartmentUrgency,
     byImpact: byImpact as Row[],
     byDomain: byDomain as Row[],
     byUrgency: byUrgency as Row[],
