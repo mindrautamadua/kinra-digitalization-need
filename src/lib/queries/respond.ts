@@ -1,5 +1,5 @@
 import "server-only";
-import { and, desc, eq, ne } from "drizzle-orm";
+import { and, desc, eq, inArray, ne } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { assessmentPeriods, departmentSubmissions, digitalNeeds, periodDepartments } from "@/lib/db/schema";
 import type { SessionUser } from "@/lib/auth/session";
@@ -41,23 +41,28 @@ export async function previousNeedFor(submissionId: string, excludeNeedId: strin
 
 export type PreviousNeed = NonNullable<Awaited<ReturnType<typeof previousNeedFor>>>;
 
+const NEED_CONTEXT = {
+  submission: { with: { period: true, department: true, respondent: { columns: { id: true, fullName: true, email: true } } } },
+  review: { with: { reviewer: { columns: { id: true, fullName: true } } } },
+  attachments: { with: { uploader: { columns: { fullName: true } } } },
+  threads: { with: { author: { columns: { id: true, fullName: true, role: true } } }, orderBy: (t, { asc }) => [asc(t.createdAt)] },
+  interviews: { with: { owner: { columns: { fullName: true } } }, orderBy: (t, { desc }) => [desc(t.createdAt)] },
+} as const satisfies NonNullable<Parameters<typeof db.query.digitalNeeds.findFirst>[0]>["with"];
+
 /** Memuat kebutuhan beserta konteks dan memastikan pengguna berhak melihat. Null bila tidak berhak. */
 export async function loadNeedFor(user: SessionUser, needId: string) {
-  const need = await db.query.digitalNeeds.findFirst({
-    where: eq(digitalNeeds.id, needId),
-    with: {
-      submission: { with: { period: true, department: true, respondent: { columns: { id: true, fullName: true, email: true } } } },
-      review: { with: { reviewer: { columns: { id: true, fullName: true } } } },
-      attachments: { with: { uploader: { columns: { fullName: true } } } },
-      threads: { with: { author: { columns: { id: true, fullName: true, role: true } } }, orderBy: (t, { asc }) => [asc(t.createdAt)] },
-      interviews: { with: { owner: { columns: { fullName: true } } }, orderBy: (t, { desc }) => [desc(t.createdAt)] },
-    },
-  });
+  const need = await db.query.digitalNeeds.findFirst({ where: eq(digitalNeeds.id, needId), with: NEED_CONTEXT });
   if (!need) return null;
   if (user.role === "respondent") {
     if (!user.departmentId || need.submission.departmentId !== user.departmentId) return null;
   }
   return need;
+}
+
+/** Memuat banyak kebutuhan beserta konteks (untuk laporan). Pemanggil wajib sudah membatasi id sesuai hak akses. */
+export async function loadNeedsByIds(ids: string[]) {
+  if (ids.length === 0) return [];
+  return db.query.digitalNeeds.findMany({ where: inArray(digitalNeeds.id, ids), with: NEED_CONTEXT });
 }
 
 export type NeedWithContext = NonNullable<Awaited<ReturnType<typeof loadNeedFor>>>;

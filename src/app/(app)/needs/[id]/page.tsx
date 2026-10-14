@@ -8,7 +8,8 @@ import { digitalNeeds } from "@/lib/db/schema";
 import { getSetting } from "@/lib/settings";
 import { PageHeader, Card, CardBody, CardHeader, DescriptionList } from "@/components/ui/card";
 import { StatusBadge, Badge } from "@/components/ui/badge";
-import { LinkButton } from "@/components/ui/button";
+import { Printer } from "lucide-react";
+import { LinkButton, buttonClass } from "@/components/ui/button";
 import { NeedDetail } from "@/components/needs/need-detail";
 import { AttachmentPanel } from "@/components/needs/attachments";
 import { ThreadPanel } from "@/components/needs/thread";
@@ -72,6 +73,9 @@ export default async function StaffNeedPage({ params }: { params: Promise<{ id: 
                 Koreksi isi
               </LinkButton>
             )}
+            <a href={`/api/needs/${need.id}/pdf`} target="_blank" rel="noopener" className={buttonClass("outline", "sm")}>
+              <Printer className="h-4 w-4" /> Cetak PDF
+            </a>
             <LinkButton href="/needs" variant="outline" size="sm">
               Register
             </LinkButton>

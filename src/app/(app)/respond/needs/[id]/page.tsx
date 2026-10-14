@@ -3,7 +3,8 @@ import { requireRole } from "@/lib/auth/guard";
 import { loadNeedFor, RESPONDENT_EDITABLE } from "@/lib/queries/respond";
 import { PageHeader, Card, CardBody, CardHeader } from "@/components/ui/card";
 import { StatusBadge, Badge } from "@/components/ui/badge";
-import { LinkButton } from "@/components/ui/button";
+import { Printer } from "lucide-react";
+import { LinkButton, buttonClass } from "@/components/ui/button";
 import { NeedDetail } from "@/components/needs/need-detail";
 import { AttachmentPanel } from "@/components/needs/attachments";
 import { ThreadPanel } from "@/components/needs/thread";
@@ -37,6 +38,9 @@ export default async function RespondentNeedPage({ params, searchParams }: { par
           <>
             <StatusBadge status={need.status} />
             {editable && <LinkButton href={`/respond/needs/${need.id}/edit`}>{need.status === "draft" ? "Lanjutkan pengisian" : "Perbaiki & kirim ulang"}</LinkButton>}
+            <a href={`/api/needs/${need.id}/pdf`} target="_blank" rel="noopener" className={buttonClass("outline", "md")}>
+              <Printer className="h-4 w-4" /> Cetak PDF
+            </a>
             <LinkButton href="/respond" variant="outline">
               Kembali
             </LinkButton>

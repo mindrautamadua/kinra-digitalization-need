@@ -109,6 +109,9 @@ export function RegisterFilterForm({
         </LinkButton>
         {showExport && (
           <span className="ml-auto flex gap-2">
+            <a className="text-xs font-medium text-primary hover:underline" href={`/api/export/needs.pdf?${exportQuery}`} target="_blank" rel="noopener">
+              Cetak laporan per Bagian (PDF)
+            </a>
             <a className="text-xs font-medium text-primary hover:underline" href={`/api/export/needs.xlsx?${exportQuery}`}>
               Ekspor Excel (.xlsx)
             </a>
